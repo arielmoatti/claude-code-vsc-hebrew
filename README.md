@@ -148,8 +148,12 @@ Step 4 — Add a SessionStart hook to ~/.claude/settings.json:
   "hooks": {
     "SessionStart": [
       {
-        "type": "command",
-        "command": "bash FULL_PATH/scripts/fix-claude-rtl.sh"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash FULL_PATH/scripts/fix-claude-rtl.sh"
+          }
+        ]
       }
     ]
   }
@@ -192,7 +196,7 @@ Step 6 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window
 ## מגבלות ידועות
 
 - הודעה שמתחילה באנגלית עם פחות מ-30% עברית — כל הבועה תהיה LTR (כל בועת הודעה היא אלמנט אחד)
-- התנגשות עם תוספי RTL אחרים — השתמשו רק באחד
+- התנגשות עם תוספי RTL אחרים — השתמשו רק באחד. בפרט, תוסף כמו <a href="https://github.com/YechielBy/claude-code-rtl-extension">YechielBy RTL</a> מנהל גיבויים משלו של הקבצים, וגם כיבוי שלו עלול לדרוס את הפאטץ׳
 
 ## קרדיט
 
@@ -200,6 +204,32 @@ Step 6 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window
 
 
 אלגוריתם הזיהוי בהשראת <a href="https://github.com/GuyRonnen/rtl-for-vs-code-agents">GuyRonnen/rtl-for-vs-code-agents</a> (סף 30%&rlm;, עוגני RLM&rlm;, <code dir="ltr">unicode-bidi: isolate</code>).
+
+## טיפ: תצוגת Markdown בעברית ב-VSCode
+
+אם קבצי <code dir="ltr">.md</code> בעברית מוצגים מיושרים לשמאל ב-Preview של VSCode, צרו קובץ CSS:
+
+<div dir="ltr">
+
+```css
+/* ~/.vscode/rtl-preview.css */
+p, li, h1, h2, h3, h4, h5, h6, td, th, blockquote {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+```
+
+</div>
+
+והוסיפו ל-<code dir="ltr">settings.json</code> של VSCode:
+
+<div dir="ltr">
+
+```json
+"markdown.styles": ["C:\\Users\\YOUR_USER\\.vscode\\rtl-preview.css"]
+```
+
+</div>
 
 ## רישיון
 
