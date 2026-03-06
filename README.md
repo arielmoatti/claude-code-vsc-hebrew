@@ -1,63 +1,61 @@
-# Claude Code Hebrew Fix (RTL) v4
+# תיקון עברית (RTL) ל-Claude Code ב-VSCode — גרסה 4
 
-Fix Hebrew (and Arabic) display in the Claude Code VSCode extension.
+בלי התיקון הזה, עברית מוצגת הפוך בתוסף Claude Code — `םולש` במקום `שלום`.
 
-Without this fix, Hebrew text appears reversed — `םולש` instead of `שלום`.
+## הבעיה
 
-## The Problem
+ה-CSS של התוסף כולל כלל `unicode-bidi: bidi-override` שכופה כיוון שמאל-לימין על **כל** הטקסט, כולל עברית.
 
-Claude Code's webview CSS includes a `unicode-bidi: bidi-override` rule that forces left-to-right character ordering on **all** text, breaking every RTL language.
+## מה הפתרון עושה
 
-## What This Fix Does
+סקריפט Bash שרץ אוטומטית בתחילת כל סשן של Claude Code (דרך [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks)) ועושה שלושה דברים:
 
-A Bash script that runs automatically at every Claude Code session start (via [hooks](https://docs.anthropic.com/en/docs/claude-code/hooks)) and does three things:
+1. **מנטרל את הבאג** — מחליף `bidi-override` ב-`normal`
+2. **מזריק CSS** — בידוד כיוון per פסקה, בלוקי קוד תמיד LTR, נקודות ברשימות בצד הנכון
+3. **מזריק JS חכם** — זיהוי שפה בזמן אמת per פסקה באמצעות MutationObserver
 
-1. **Neutralizes the bug** — replaces `bidi-override` with `normal`
-2. **Injects CSS** — per-paragraph direction isolation, code blocks always LTR, proper list bullet positioning
-3. **Injects smart JS** — real-time language detection per paragraph using MutationObserver
+### אלגוריתם הזיהוי (חדש בגרסה 4)
 
-### Smart Language Detection (v4)
+כל פסקה נבדקת בנפרד:
 
-Each paragraph is analyzed independently:
-
-| First strong letter | Hebrew ratio | Result |
+| אות חזקה ראשונה | אחוז עברית | תוצאה |
 |---|---|---|
-| Hebrew | any | **RTL** |
-| Latin | ≥ 30% Hebrew | **RTL** |
-| Latin | < 30% Hebrew | **LTR** |
-| none (only numbers/emoji) | — | unchanged |
+| עברית | לא משנה | **RTL** |
+| אנגלית | ≥ 30% עברית | **RTL** |
+| אנגלית | < 30% עברית | **LTR** |
+| אין אותיות (רק מספרים/אמוג'י) | — | ללא שינוי |
 
-Additionally, an **RLM anchor** (U+200F) is injected at the start of RTL paragraphs to fix BiDi issues when the first inline child contains LTR text (e.g. `<code>` inside a Hebrew sentence).
+בנוסף, מוזרק **עוגן RLM** (תו U+200F) בתחילת פסקאות RTL — פותר בעיות כיוון כשהילד הראשון מכיל טקסט אנגלי (למשל `<code>` בתוך משפט עברי).
 
-### Examples
-
-```
-"שלום עולם"                        → RTL (first strong = Hebrew)
-"Hello world"                      → LTR (first strong = Latin, 0% Hebrew)
-"Hello שלום"                       → RTL (first strong = Latin, but 36% ≥ 30%)
-"1.1 Migration: הוספת שדות"         → RTL (first strong = Latin, but ~50% ≥ 30%)
-"🎉 שלום"                          → RTL (emoji skipped, first strong = Hebrew)
-```
-
-## Installation
-
-### Quick Install (paste into Claude Code)
-
-Copy this entire block and paste it into Claude Code — it will set everything up:
+### דוגמאות
 
 ```
-Install the Hebrew RTL fix for Claude Code VSCode extension.
-Do all these steps:
+"שלום עולם"                        → RTL (אות ראשונה עברית)
+"Hello world"                      → LTR (אות ראשונה אנגלית, 0% עברית)
+"Hello שלום"                       → RTL (אות ראשונה אנגלית, אבל 36% ≥ 30%)
+"1.1 Migration: הוספת שדות"         → RTL (אות ראשונה אנגלית, אבל ~50% ≥ 30%)
+"🎉 שלום"                          → RTL (דילוג על אמוג'י, אות ראשונה עברית)
+```
 
-Step 1 — Create a scripts directory in the current working directory (if it doesn't exist).
+## התקנה
 
-Step 2 — Download fix-claude-rtl.sh from
+### התקנה מהירה (הדבקה לתוך Claude Code)
+
+העתיקו את הבלוק הבא והדביקו אותו לתוך Claude Code — הוא יעשה את השאר:
+
+```
+התקן את תיקון ה-RTL v4 לעברית ב-Claude Code VSCode extension.
+בצע את כל הצעדים הבאים:
+
+שלב 1 — צור תיקיית scripts בתיקיית העבודה הנוכחית (אם לא קיימת).
+
+שלב 2 — הורד את fix-claude-rtl.sh מהכתובת
 https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main/fix-claude-rtl.sh
-and save it to scripts/fix-claude-rtl.sh
+ושמור אותו ב-scripts/fix-claude-rtl.sh
 
-Step 3 — Create scripts/rtl-mode.conf with the content: full
+שלב 3 — צור scripts/rtl-mode.conf עם התוכן: full
 
-Step 4 — Add a SessionStart hook to ~/.claude/settings.json:
+שלב 4 — הוסף hook לקובץ ~/.claude/settings.json:
 {
   "hooks": {
     "SessionStart": [
@@ -68,56 +66,56 @@ Step 4 — Add a SessionStart hook to ~/.claude/settings.json:
     ]
   }
 }
-Replace FULL_PATH with the absolute path to your project's scripts directory.
+החלף FULL_PATH בנתיב המלא של תיקיית scripts.
 
-Step 5 — Run the script once to apply the fix.
+שלב 5 — הרץ את הסקריפט פעם ראשונה.
 
-Step 6 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window).
+שלב 6 — בקש ממני לעשות Reload Window (Ctrl+Shift+P → Developer: Reload Window).
 ```
 
-### Manual Install
+### התקנה ידנית
 
-1. Download `fix-claude-rtl.sh` to a `scripts/` folder in your project
-2. Create `scripts/rtl-mode.conf` containing `full`
-3. Add the SessionStart hook to `~/.claude/settings.json` (see above)
-4. Run `bash scripts/fix-claude-rtl.sh`
-5. Reload VSCode window
+1. הורידו את `fix-claude-rtl.sh` לתיקיית `scripts/` בפרויקט
+2. צרו `scripts/rtl-mode.conf` עם התוכן `full`
+3. הוסיפו את ה-hook ל-`~/.claude/settings.json` (ראו למעלה)
+4. הריצו `bash scripts/fix-claude-rtl.sh`
+5. עשו Reload Window ב-VSCode
 
-## Two Modes
+## שני מצבים
 
-| Mode | Description |
+| מצב | תיאור |
 |---|---|
-| **full** (default) | Full RTL with language detection — Hebrew right-aligned, English left-aligned |
-| **word** | Character fix only — Hebrew words readable, no paragraph direction change |
+| **full** (ברירת מחדל) | RTL מלא עם זיהוי שפה — עברית מימין, אנגלית משמאל |
+| **word** | רק תיקון תווים — מילים בעברית תקינות, בלי שינוי כיוון פסקה |
 
-Switch by telling Claude: *"Switch RTL to word"* or *"Switch RTL to full"*
+להחלפת מצב, אמרו לקלוד: *"תחליף RTL ל-word"* או *"תחליף RTL ל-full"*
 
-## How It Works
+## איך זה עובד
 
-The script patches the Claude Code extension's webview files (`index.css` and `index.js`) located in `~/.vscode/extensions/anthropic.claude-code-*/webview/`.
+הסקריפט פוטץ' את קבצי ה-webview של התוסף (`index.css` ו-`index.js`) שנמצאים ב-`~/.vscode/extensions/anthropic.claude-code-*/webview/`.
 
-**CSS patch:**
-- `unicode-bidi: isolate` on all text elements (paragraphs, headings, list items, etc.)
-- `unicode-bidi: embed` + `direction: ltr` on code blocks
-- `list-style-position: inside` for RTL list items
-- `direction: inherit` on children of user message bubbles (to counter the global `* { direction: ltr }` rule)
+**פאטץ' CSS:**
+- `unicode-bidi: isolate` על כל אלמנטי טקסט (פסקאות, כותרות, פריטי רשימה וכו')
+- `unicode-bidi: embed` + `direction: ltr` על בלוקי קוד
+- `list-style-position: inside` לפריטי רשימה RTL
+- `direction: inherit` על צאצאי בועות הודעה (כדי לנטרל את הכלל הגלובלי `* { direction: ltr }`)
 
-**JS patch:**
-- Two MutationObservers — one for Claude's responses, one for sent user messages
-- Per-paragraph direction detection using the first-strong + 30% threshold algorithm
-- Watchdog on user messages that re-applies direction if VSCode resets it
+**פאטץ' JS:**
+- שני MutationObservers — אחד לתגובות קלוד, אחד להודעות שנשלחו
+- זיהוי כיוון per פסקה לפי אלגוריתם first-strong + סף 30%
+- Watchdog על הודעות משתמש שמחזיר את הכיוון אם VSCode מאפס אותו
 
-The script is **idempotent** — it removes any previous patch before applying, so it's safe to run multiple times. It handles all installed extension versions simultaneously.
+הסקריפט **אידמפוטנטי** — מסיר כל פאטץ' קודם לפני שמחיל, אז בטוח להריץ כמה פעמים. מטפל בכל גרסאות התוסף המותקנות במקביל.
 
-## Known Limitations
+## מגבלות ידועות
 
-- A user message that starts with English and has < 30% Hebrew will be fully LTR (each message bubble is a single element)
-- Conflicts with other RTL extensions (e.g. `YechielBy/claude-code-rtl-extension` or `GuyRonnen/rtl-for-vs-code-agents`) — use only one
+- הודעה שמתחילה באנגלית עם פחות מ-30% עברית — כל הבועה תהיה LTR (כל בועת הודעה היא אלמנט אחד)
+- התנגשות עם תוספי RTL אחרים (למשל `YechielBy/claude-code-rtl-extension` או `GuyRonnen/rtl-for-vs-code-agents`) — השתמשו רק באחד
 
-## Credits
+## קרדיט
 
-v4 detection algorithm inspired by [GuyRonnen/rtl-for-vs-code-agents](https://github.com/GuyRonnen/rtl-for-vs-code-agents) (30% threshold, RLM anchors, `unicode-bidi: isolate`).
+אלגוריתם הזיהוי בגרסה 4 בהשראת [GuyRonnen/rtl-for-vs-code-agents](https://github.com/GuyRonnen/rtl-for-vs-code-agents) (סף 30%, עוגני RLM, `unicode-bidi: isolate`).
 
-## License
+## רישיון
 
 MIT
