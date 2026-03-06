@@ -196,7 +196,7 @@ Step 6 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window
 ## מגבלות ידועות
 
 - הודעה שמתחילה באנגלית עם פחות מ-30% עברית — כל הבועה תהיה LTR (כל בועת הודעה היא אלמנט אחד)
-- התנגשות עם תוספי RTL אחרים — השתמשו רק באחד. בפרט, תוסף כמו <a href="https://github.com/YechielBy/claude-code-rtl-extension">YechielBy RTL</a> מנהל גיבויים משלו של הקבצים, וגם כיבוי שלו עלול לדרוס את הפאטץ׳
+- השתמשו רק בפתרון RTL אחד. בפרט, תוסף כמו <a href="https://github.com/YechielBy/claude-code-rtl-extension">YechielBy RTL</a> מנהל גיבויים משלו של הקבצים — גם כיבוי בלבד (בלי הסרה) דורס את הפאטץ׳ שלנו בשקט. אם התקנתם אותו בעבר — הסירו לגמרי (Uninstall), לא רק Disable
 
 ## קרדיט
 
