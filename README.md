@@ -1,12 +1,15 @@
+<div dir="rtl">
+
 # תיקון עברית (RTL) ל-Claude Code ב-VSCode
 
-בלי התיקון הזה, עברית מוצגת הפוך בתוסף Claude Code — `םולש` במקום `שלום`.
+בלי התיקון הזה, עברית מוצגת הפוך בתוסף Claude Code — <code>םולש</code> במקום <code>שלום</code>.
 
 ## הבעיה
 
 ה-CSS של Claude Code כולל שני כללים שהורסים עברית:
-1. `unicode-bidi: bidi-override` — הופך את סדר התווים. "שלום" הופך ל-"םולש"
-2. `* { direction: ltr }` — כופה כיוון שמאל-לימין על **כל** אלמנט בעמוד, כולל צאצאים בתוך בועות הודעה
+
+1. <code dir="ltr">unicode-bidi: bidi-override</code> — הופך את סדר התווים. ״שלום״ הופך ל-״םולש״
+2. <code dir="ltr">* { direction: ltr }</code> — כופה כיוון שמאל-לימין על **כל** אלמנט בעמוד, כולל צאצאים בתוך בועות הודעה
 
 התוצאה: עברית לא קריאה, פסקאות מיושרות לשמאל, פיסוק ומספרים במקום הלא נכון.
 
@@ -14,74 +17,110 @@
 
 ### שלב 1: תיקון תווים הפוכים
 
-מחפש את הכלל `bidi-override` בקובץ ה-CSS של התוסף ומחליף אותו ב-`normal`. זה לבד מספיק כדי שמילים בעברית יהיו קריאות (מצב **word**).
+מחפש את הכלל <code dir="ltr">bidi-override</code> בקובץ ה-CSS של התוסף ומחליף אותו ב-<code dir="ltr">normal</code>. זה לבד מספיק כדי שמילים בעברית יהיו קריאות (מצב **word**).
 
 ### שלב 2: הזרקת CSS
 
 מוסיף בלוק CSS לסוף הקובץ שעושה את הדברים הבאים:
 
-| מה | על מה | למה |
-|---|---|---|
-| `unicode-bidi: isolate` | פסקאות, כותרות, פריטי רשימה, תאי טבלה, ציטוטים | מבודד כל אלמנט כיוונית — כל פסקה יכולה להיות RTL או LTR בלי להשפיע על השכנות שלה |
-| `text-align: start` | כל האלמנטים הנ"ל | היישור עוקב אחרי הכיוון — עברית מיושרת ימינה, אנגלית שמאלה |
-| `direction: ltr` + `unicode-bidi: embed` | בלוקי קוד (`pre`, `code`) | קוד תמיד נשאר שמאל-לימין, גם בתוך פסקה עברית, מבודד מהקונטקסט |
-| `list-style-position: inside` | פריטי רשימה שזוהו כ-RTL | הנקודה/מספר של הרשימה מופיעים בצד ימין, לא שמאל |
-| `unicode-bidi: plaintext` | חלונית הפרומפט (שדה הקלט) | מזהה אוטומטית את כיוון הטקסט תוך כדי הקלדה — מתחילים לכתוב עברית? הכיוון מתהפך |
-| `unicode-bidi: isolate` | בועות הודעה שנשלחו (`userMessage`) | בידוד כיווני של ההודעה כולה |
-| `direction: inherit` | **כל** הצאצאים בתוך בועת הודעה (חוץ מקוד) | מנטרל את הכלל הגלובלי `* { direction: ltr }` — הצאצאים יורשים כיוון מההורה במקום לקבל LTR בכוח |
+<table>
+<tr><th>מה</th><th>על מה</th><th>למה</th></tr>
+<tr>
+<td><code dir="ltr">unicode-bidi: isolate</code></td>
+<td>פסקאות, כותרות, פריטי רשימה, תאי טבלה, ציטוטים</td>
+<td>מבודד כל אלמנט כיוונית — כל פסקה יכולה להיות RTL או LTR בלי להשפיע על השכנות שלה</td>
+</tr>
+<tr>
+<td><code dir="ltr">text-align: start</code></td>
+<td>כל האלמנטים הנ״ל</td>
+<td>היישור עוקב אחרי הכיוון — עברית מיושרת ימינה, אנגלית שמאלה</td>
+</tr>
+<tr>
+<td><code dir="ltr">direction: ltr</code> + <code dir="ltr">unicode-bidi: embed</code></td>
+<td>בלוקי קוד (<code>pre</code>, <code>code</code>)</td>
+<td>קוד תמיד נשאר שמאל-לימין, גם בתוך פסקה עברית, מבודד מהקונטקסט</td>
+</tr>
+<tr>
+<td><code dir="ltr">list-style-position: inside</code></td>
+<td>פריטי רשימה שזוהו כ-RTL</td>
+<td>הנקודה/מספר של הרשימה מופיעים בצד ימין, לא שמאל</td>
+</tr>
+<tr>
+<td><code dir="ltr">unicode-bidi: plaintext</code></td>
+<td>חלונית הפרומפט (שדה הקלט)</td>
+<td>מזהה אוטומטית את כיוון הטקסט תוך כדי הקלדה — מתחילים לכתוב עברית? הכיוון מתהפך</td>
+</tr>
+<tr>
+<td><code dir="ltr">unicode-bidi: isolate</code></td>
+<td>בועות הודעה שנשלחו (<code dir="ltr">userMessage</code>)</td>
+<td>בידוד כיווני של ההודעה כולה</td>
+</tr>
+<tr>
+<td><code dir="ltr">direction: inherit</code></td>
+<td><strong>כל</strong> הצאצאים בתוך בועת הודעה (חוץ מקוד)</td>
+<td>מנטרל את הכלל הגלובלי <code dir="ltr">* { direction: ltr }</code> — הצאצאים יורשים כיוון מההורה במקום לקבל LTR בכוח</td>
+</tr>
+</table>
 
 ### שלב 3: הזרקת JavaScript
 
-מוסיף סקריפט JS לסוף `index.js` שעושה שלושה דברים:
+מוסיף סקריפט JS לסוף <code dir="ltr">index.js</code> שעושה ארבעה דברים:
 
 **א. זיהוי כיוון per פסקה בתגובות קלוד**
 
-כל פסקה, כותרת, פריט רשימה, תא טבלה וכו' נבדקים בנפרד. הזיהוי:
+כל פסקה, כותרת, פריט רשימה, תא טבלה וכו׳ נבדקים בנפרד. הזיהוי:
+
 - סורק את הטקסט (מתעלם מתוכן בלוקי קוד)
-- מוצא את **האות החזקה הראשונה** (מדלג על אמוג'ים, מספרים, פיסוק, רווחים)
+- מוצא את **האות החזקה הראשונה** (מדלג על אמוג׳ים, מספרים, פיסוק, רווחים)
 - סופר אותיות עבריות מול אנגליות
 - מחליט:
-  - אות ראשונה עברית → **RTL** (תמיד)
-  - אות ראשונה אנגלית אבל ≥30% מהאותיות עבריות → **RTL**
-  - אות ראשונה אנגלית ופחות מ-30% עברית → **LTR**
-  - אין אותיות בכלל → ללא שינוי
-- מגדיר `direction` ו-`text-align` בהתאם
-- אם RTL — מזריק תו **RLM** (U+200F) בתחילת האלמנט, כדי לעגן את כיוון ה-BiDi כשהילד הראשון מכיל טקסט אנגלי (למשל שם פונקציה ב-`code` בתוך משפט עברי)
+  - אות ראשונה עברית ← **RTL** (תמיד)
+  - אות ראשונה אנגלית אבל 30% או יותר מהאותיות עבריות ← **RTL**
+  - אות ראשונה אנגלית ופחות מ-30% עברית ← **LTR**
+  - אין אותיות בכלל ← ללא שינוי
+- מגדיר <code dir="ltr">direction</code> ו-<code dir="ltr">text-align</code> בהתאם
+- אם RTL — מזריק תו **RLM** &#x200F;(U+200F) בתחילת האלמנט, כדי לעגן את כיוון ה-BiDi כשהילד הראשון מכיל טקסט אנגלי (למשל שם פונקציה ב-<code>code</code> בתוך משפט עברי)
 
 **ב. זיהוי כיוון בהודעות שנשלחו**
 
-כל בועת הודעה שנשלחה (`userMessage`) עוברת את אותו אלגוריתם זיהוי ומקבלת כיוון RTL או LTR.
+כל בועת הודעה שנשלחה (<code dir="ltr">userMessage</code>) עוברת את אותו אלגוריתם זיהוי ומקבלת כיוון RTL או LTR.
 
-**ג. Watchdog על הודעות**
+**ג. שומר (Watchdog) על הודעות**
 
-VSCode עלול לאפס את ה-`style` של בועות ההודעה חזרה ל-LTR. ה-Watchdog הוא MutationObserver שעוקב אחרי שינויי `style` ו-`dir` על כל בועת הודעה, ומחזיר את הכיוון הנכון מיד אם מישהו שינה אותו.
+VSCode עלול לאפס את ה-style של בועות ההודעה חזרה ל-LTR. השומר הוא MutationObserver שעוקב אחרי שינויי <code dir="ltr">style</code> ו-<code dir="ltr">dir</code> על כל בועת הודעה, ומחזיר את הכיוון הנכון מיד אם מישהו שינה אותו.
 
 **ד. צפייה בתוכן חדש**
 
-MutationObserver נוסף על `#root` עוקב אחרי:
+MutationObserver נוסף על <code dir="ltr">#root</code> עוקב אחרי:
+
 - **אלמנטים חדשים** שנוספים ל-DOM (תגובה חדשה של קלוד, הודעה חדשה שנשלחה) — מפעיל עליהם זיהוי כיוון
-- **שינויי טקסט** (streaming של תגובת קלוד) — מעדכן את כיוון הפסקה בזמן אמת תוך כדי שקלוד כותב
+- **שינויי טקסט** בזמן streaming של תגובת קלוד — מעדכן את כיוון הפסקה בזמן אמת תוך כדי שקלוד כותב
 
 ### מנגנון הפעלה אוטומטי
 
-הסקריפט רשום כ-**SessionStart hook** ב-`~/.claude/settings.json`. כל פעם שנפתח סשן חדש של Claude Code:
+הסקריפט רשום כ-**SessionStart hook** בקובץ <code dir="ltr">~/.claude/settings.json</code>. כל פעם שנפתח סשן חדש של Claude Code:
+
 1. הסקריפט רץ אוטומטית
-2. סורק את **כל** גרסאות התוסף המותקנות (`~/.vscode/extensions/anthropic.claude-code-*/webview/`)
-3. לכל גרסה — מסיר פאטץ' ישן (אם קיים) ומחיל את החדש
+2. סורק את **כל** גרסאות התוסף המותקנות (<code dir="ltr">~/.vscode/extensions/anthropic.claude-code-*/webview/</code>)
+3. לכל גרסה — מסיר פאטץ׳ ישן (אם קיים) ומחיל את החדש
 4. אם אין מה לתקן — לא עושה כלום
 
 זה אומר שגם אחרי עדכון של התוסף — הסקריפט מתקן אוטומטית בסשן הבא.
 
 ### דוגמאות לזיהוי
 
+<div dir="ltr">
+
 ```
-"שלום עולם"                        → RTL (אות ראשונה עברית)
-"Hello world"                      → LTR (אות ראשונה אנגלית, 0% עברית)
-"Hello שלום"                       → RTL (אות ראשונה אנגלית, אבל 36% ≥ 30%)
-"1.1 Migration: הוספת שדות"         → RTL (אות ראשונה אנגלית, אבל ~50% ≥ 30%)
-"🎉 שלום"                          → RTL (דילוג על אמוג'י, אות ראשונה עברית)
-"Error 404"                        → LTR (אות ראשונה אנגלית, 0% עברית)
+"שלום עולם"                        → RTL (first strong = Hebrew)
+"Hello world"                      → LTR (first strong = Latin, 0% Hebrew)
+"Hello שלום"                       → RTL (first strong = Latin, but 36% ≥ 30%)
+"1.1 Migration: הוספת שדות"         → RTL (first strong = Latin, but ~50% ≥ 30%)
+"🎉 שלום"                          → RTL (emoji skipped, first strong = Hebrew)
+"Error 404"                        → LTR (first strong = Latin, 0% Hebrew)
 ```
+
+</div>
 
 ## התקנה
 
@@ -89,19 +128,21 @@ MutationObserver נוסף על `#root` עוקב אחרי:
 
 העתיקו את הבלוק הבא והדביקו אותו לתוך Claude Code — הוא יעשה את השאר:
 
+<div dir="ltr">
+
 ```
-התקן את תיקון ה-RTL v4 לעברית ב-Claude Code VSCode extension.
-בצע את כל הצעדים הבאים:
+Install the Hebrew RTL fix for Claude Code VSCode extension.
+Do all these steps:
 
-שלב 1 — צור תיקיית scripts בתיקיית העבודה הנוכחית (אם לא קיימת).
+Step 1 — Create a scripts directory in the current working directory (if it doesn't exist).
 
-שלב 2 — הורד את fix-claude-rtl.sh מהכתובת
+Step 2 — Download fix-claude-rtl.sh from
 https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main/fix-claude-rtl.sh
-ושמור אותו ב-scripts/fix-claude-rtl.sh
+and save it to scripts/fix-claude-rtl.sh
 
-שלב 3 — צור scripts/rtl-mode.conf עם התוכן: full
+Step 3 — Create scripts/rtl-mode.conf with the content: full
 
-שלב 4 — הוסף hook לקובץ ~/.claude/settings.json:
+Step 4 — Add a SessionStart hook to ~/.claude/settings.json:
 {
   "hooks": {
     "SessionStart": [
@@ -112,39 +153,52 @@ https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main/fix-cl
     ]
   }
 }
-החלף FULL_PATH בנתיב המלא של תיקיית scripts.
+Replace FULL_PATH with the absolute path to your project's scripts directory.
 
-שלב 5 — הרץ את הסקריפט פעם ראשונה.
+Step 5 — Run the script once to apply the fix.
 
-שלב 6 — בקש ממני לעשות Reload Window (Ctrl+Shift+P → Developer: Reload Window).
+Step 6 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window).
 ```
+
+</div>
+
+> **שימו לב:** הפרומפט באנגלית בכוונה — כי קלוד צריך להבין את ההוראות ולבצע אותן.
 
 ### התקנה ידנית
 
-1. הורידו את `fix-claude-rtl.sh` לתיקיית `scripts/` בפרויקט
-2. צרו `scripts/rtl-mode.conf` עם התוכן `full`
-3. הוסיפו את ה-hook ל-`~/.claude/settings.json` (ראו למעלה)
-4. הריצו `bash scripts/fix-claude-rtl.sh`
+1. הורידו את <code dir="ltr">fix-claude-rtl.sh</code> לתיקיית <code dir="ltr">scripts/</code> בפרויקט
+2. צרו <code dir="ltr">scripts/rtl-mode.conf</code> עם התוכן <code dir="ltr">full</code>
+3. הוסיפו את ה-hook ל-<code dir="ltr">~/.claude/settings.json</code> (ראו למעלה)
+4. הריצו <code dir="ltr">bash scripts/fix-claude-rtl.sh</code>
 5. עשו Reload Window ב-VSCode
 
 ## שני מצבים
 
-| מצב | תיאור |
-|---|---|
-| **full** (ברירת מחדל) | הכל — תיקון תווים + CSS + JS עם זיהוי שפה |
-| **word** | רק תיקון תווים הפוכים, בלי שינוי כיוון פסקה ובלי JS |
+<table>
+<tr><th>מצב</th><th>תיאור</th></tr>
+<tr>
+<td><strong>full</strong> (ברירת מחדל)</td>
+<td>הכל — תיקון תווים + CSS + JS עם זיהוי שפה</td>
+</tr>
+<tr>
+<td><strong>word</strong></td>
+<td>רק תיקון תווים הפוכים, בלי שינוי כיוון פסקה ובלי JS</td>
+</tr>
+</table>
 
-להחלפת מצב, אמרו לקלוד: *"תחליף RTL ל-word"* או *"תחליף RTL ל-full"*
+להחלפת מצב, אמרו לקלוד: *״תחליף RTL ל-word״* או *״תחליף RTL ל-full״*
 
 ## מגבלות ידועות
 
 - הודעה שמתחילה באנגלית עם פחות מ-30% עברית — כל הבועה תהיה LTR (כל בועת הודעה היא אלמנט אחד)
-- התנגשות עם תוספי RTL אחרים (למשל `YechielBy/claude-code-rtl-extension` או `GuyRonnen/rtl-for-vs-code-agents`) — השתמשו רק באחד
+- התנגשות עם תוספי RTL אחרים — השתמשו רק באחד
 
 ## קרדיט
 
-אלגוריתם הזיהוי בהשראת [GuyRonnen/rtl-for-vs-code-agents](https://github.com/GuyRonnen/rtl-for-vs-code-agents) (סף 30%, עוגני RLM, `unicode-bidi: isolate`).
+אלגוריתם הזיהוי בהשראת <a href="https://github.com/GuyRonnen/rtl-for-vs-code-agents">GuyRonnen/rtl-for-vs-code-agents</a> (סף 30%&rlm;, עוגני RLM&rlm;, <code dir="ltr">unicode-bidi: isolate</code>).
 
 ## רישיון
 
 MIT
+
+</div>
