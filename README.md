@@ -1,6 +1,7 @@
 <div dir="rtl">
 
 # תיקון עברית (RTL) ל-Claude Code ב-VSCode
+<video src="demo.mp4" autoplay loop muted playsinline width="100%"></video>
 
 בלי התיקון הזה, עברית מוצגת הפוך בתוסף Claude Code — <code>םולש</code> במקום <code>שלום</code>.
 
