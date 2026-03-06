@@ -196,6 +196,9 @@ Step 6 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window
 
 ## קרדיט
 
+נבנה על ידי **מנחם אמיתי** — צמיחה מבוססת שפיות | אוטומציות.
+
+
 אלגוריתם הזיהוי בהשראת <a href="https://github.com/GuyRonnen/rtl-for-vs-code-agents">GuyRonnen/rtl-for-vs-code-agents</a> (סף 30%&rlm;, עוגני RLM&rlm;, <code dir="ltr">unicode-bidi: isolate</code>).
 
 ## רישיון
