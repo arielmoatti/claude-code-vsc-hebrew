@@ -47,14 +47,19 @@ for dir in "$HOME/.vscode/extensions"/anthropic.claude-code-*/webview; do
 
 $CSS_PATCH_START
 #root p,#root h1,#root h2,#root h3,#root h4,#root h5,#root h6,
-#root li,#root blockquote,#root td,#root th,#root dd,#root dt{
+#root li,#root blockquote,#root td,#root th,#root dd,#root dt,
+#content p,#content h1,#content h2,#content h3,#content h4,#content h5,#content h6,
+#content li,#content blockquote,#content td,#content th,#content dd,#content dt{
   unicode-bidi:isolate;text-align:start;
 }
-#root pre,#root code{
+#root pre,#root code,#content pre,#content code{
   direction:ltr;text-align:left;unicode-bidi:embed;
 }
-#root li[style*="direction: rtl"]{
+#root li[style*="direction: rtl"],#content li[style*="direction: rtl"]{
   list-style-position:inside;
+}
+[class*="todoItem_"]{
+  unicode-bidi:isolate;text-align:start;
 }
 [class*="messageInput"]{
   unicode-bidi:plaintext;text-align:start;
@@ -64,6 +69,11 @@ $CSS_PATCH_START
 }
 [class*="userMessage"] *:not(pre):not(code){
   direction:inherit;
+}
+[class*="questionText_"],[class*="questionTextLarge_"],
+[class*="optionLabel_"],[class*="optionDescription_"],
+[class*="questionHeader_"],[class*="questionBlock_"]{
+  unicode-bidi:plaintext;text-align:start;
 }
 $CSS_PATCH_END
 CSSPATCH
@@ -90,7 +100,7 @@ CSSPATCH
 ;(function(){
   var HEB_RE=/[\u0590-\u05FF]/;
   var LTR_RE=/[A-Za-z]/;
-  var SEL='p,h1,h2,h3,h4,h5,h6,li,blockquote,td,th,dd,dt';
+  var SEL='p,h1,h2,h3,h4,h5,h6,li,blockquote,td,th,dd,dt,[class*="questionText_"],[class*="questionTextLarge_"],[class*="optionLabel_"],[class*="optionDescription_"]';
   var USER_SEL='[class*="userMessage"]';
   var RLM='\u200F';
 
@@ -164,30 +174,41 @@ CSSPATCH
       .observe(el,{attributes:true,attributeFilter:['style','dir']});
   }
 
-  var root=document.getElementById('root');
-  if(!root)return;
-  root.querySelectorAll(SEL).forEach(setDir);
-  root.querySelectorAll(USER_SEL).forEach(watchUserDir);
-  new MutationObserver(function(muts){
-    for(var i=0;i<muts.length;i++){
-      var m=muts[i];
-      if(m.type==='characterData'){
-        var p=m.target.parentElement&&m.target.parentElement.closest(SEL);
-        if(p)setDir(p);
-        continue;
-      }
-      for(var j=0;j<m.addedNodes.length;j++){
-        var nd=m.addedNodes[j];
-        if(nd.nodeType!==1)continue;
-        if(nd.matches&&nd.matches(SEL))setDir(nd);
-        if(nd.matches&&nd.matches(USER_SEL))watchUserDir(nd);
-        if(nd.querySelectorAll){
-          nd.querySelectorAll(SEL).forEach(setDir);
-          nd.querySelectorAll(USER_SEL).forEach(watchUserDir);
+  function initContainer(container){
+    if(!container)return;
+    container.querySelectorAll(SEL).forEach(setDir);
+    container.querySelectorAll(USER_SEL).forEach(watchUserDir);
+    new MutationObserver(function(muts){
+      for(var i=0;i<muts.length;i++){
+        var m=muts[i];
+        if(m.type==='characterData'){
+          var p=m.target.parentElement&&m.target.parentElement.closest(SEL);
+          if(p)setDir(p);
+          continue;
+        }
+        for(var j=0;j<m.addedNodes.length;j++){
+          var nd=m.addedNodes[j];
+          if(nd.nodeType!==1)continue;
+          if(nd.matches&&nd.matches(SEL))setDir(nd);
+          if(nd.matches&&nd.matches(USER_SEL))watchUserDir(nd);
+          if(nd.querySelectorAll){
+            nd.querySelectorAll(SEL).forEach(setDir);
+            nd.querySelectorAll(USER_SEL).forEach(watchUserDir);
+          }
         }
       }
-    }
-  }).observe(root,{childList:true,subtree:true,characterData:true});
+    }).observe(container,{childList:true,subtree:true,characterData:true});
+  }
+  initContainer(document.getElementById('root'));
+  initContainer(document.getElementById('content'));
+
+  /* Watch for #content to appear dynamically (Plan view) */
+  if(!document.getElementById('content')){
+    new MutationObserver(function(muts,obs){
+      var c=document.getElementById('content');
+      if(c){obs.disconnect();initContainer(c);}
+    }).observe(document.body,{childList:true,subtree:true});
+  }
 })();
 /* Claude RTL JS End */
 JSPATCH
@@ -195,6 +216,14 @@ JSPATCH
     elif [ "$MODE" = "word" ] && [ "$HAS_JS_PATCH" = true ]; then
       sed -i '/\/\* Claude RTL JS Start \*\//,/\/\* Claude RTL JS End \*\//d' "$js"
       CHANGED=true
+    fi
+  fi
+
+  # --- Patch Plan Preview webview in extension.js ---
+  extjs="$(dirname "$dir")/extension.js"
+  if [ -f "$extjs" ] && [ "$MODE" = "full" ]; then
+    if ! grep -qF "Claude RTL Plan Patch" "$extjs"; then
+      node "$SCRIPT_DIR/patch-plan-rtl.js" "$extjs" && CHANGED=true
     fi
   fi
 
