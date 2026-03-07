@@ -108,6 +108,28 @@ MutationObserver נוסף על <code dir="ltr">#root</code> עוקב אחרי:
 
 זה אומר שגם אחרי עדכון של התוסף — הסקריפט מתקן אוטומטית בסשן הבא.
 
+### שלב 4: תיקון Plan View (תוכנית עבודה)
+
+כשקלוד יוצר תוכנית עבודה (Plan), היא נפתחת ב**טאב נפרד** — webview עצמאי לגמרי שלא משתמש בקבצי ה-CSS וה-JS של הצ׳אט הראשי. בלי טיפול ייעודי, כל העברית בטאב הזה מיושרת לשמאל.
+
+הסקריפט מפעיל קובץ עזר (<code dir="ltr">patch-plan-rtl.js</code>) שמוצא את ה-HTML template של Plan view בתוך <code dir="ltr">extension.js</code>, ומזריק לתוכו CSS ו-JS זהים לשלבים 2 ו-3 — כולל זיהוי שפה per פסקה ו-MutationObserver.
+
+### שלב 5: תיקון חלוניות דיאלוג (שאלות ואפשרויות)
+
+כשקלוד שואל שאלה עם אפשרויות לבחירה, נפתחת חלונית דיאלוג. גם היא מוצגת LTR כברירת מחדל — מה שהופך טקסט עברי מעורב עם אנגלית לבלתי קריא.
+
+הפאטץ׳ מוסיף סלקטורים ל-CSS ול-JS שמכסים את אלמנטי הדיאלוג:
+
+<table>
+<tr><th>סלקטור</th><th>מה הוא מכסה</th></tr>
+<tr><td><code dir="ltr">questionText_</code></td><td>טקסט השאלה</td></tr>
+<tr><td><code dir="ltr">questionTextLarge_</code></td><td>טקסט שאלה גדול</td></tr>
+<tr><td><code dir="ltr">optionLabel_</code></td><td>שם האפשרות</td></tr>
+<tr><td><code dir="ltr">optionDescription_</code></td><td>תיאור האפשרות</td></tr>
+</table>
+
+![תיקון RTL בחלונית דיאלוג](images/dialog-rtl-fix.jpg)
+
 ### דוגמאות לזיהוי
 
 <div dir="ltr">
@@ -137,9 +159,9 @@ Do all these steps:
 
 Step 1 — Create a scripts directory in the current working directory (if it doesn't exist).
 
-Step 2 — Download fix-claude-rtl.sh from
-https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main/fix-claude-rtl.sh
-and save it to scripts/fix-claude-rtl.sh
+Step 2 — Download both files from the repo and save them to scripts/:
+  curl -o scripts/fix-claude-rtl.sh https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main/fix-claude-rtl.sh
+  curl -o scripts/patch-plan-rtl.js https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main/patch-plan-rtl.js
 
 Step 3 — Create scripts/rtl-mode.conf with the content: full
 
@@ -171,7 +193,7 @@ Step 6 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window
 
 ### התקנה ידנית
 
-1. הורידו את <code dir="ltr">fix-claude-rtl.sh</code> לתיקיית <code dir="ltr">scripts/</code> בפרויקט
+1. הורידו את <code dir="ltr">fix-claude-rtl.sh</code> ואת <code dir="ltr">patch-plan-rtl.js</code> לתיקיית <code dir="ltr">scripts/</code> בפרויקט
 2. צרו <code dir="ltr">scripts/rtl-mode.conf</code> עם התוכן <code dir="ltr">full</code>
 3. הוסיפו את ה-hook ל-<code dir="ltr">~/.claude/settings.json</code> (ראו למעלה)
 4. הריצו <code dir="ltr">bash scripts/fix-claude-rtl.sh</code>
