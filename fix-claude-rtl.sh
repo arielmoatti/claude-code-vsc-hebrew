@@ -61,7 +61,7 @@ $CSS_PATCH_START
 [class*="todoItem_"]{
   unicode-bidi:isolate;text-align:start;
 }
-[class*="messageInput"]{
+[class*="messageInput"],[class*="mentionMirror"]{
   unicode-bidi:plaintext;text-align:start;
 }
 [class*="userMessage"]{

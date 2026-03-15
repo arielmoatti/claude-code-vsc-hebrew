@@ -12,11 +12,25 @@ if (data.indexOf(MARKER) !== -1) {
   process.exit(0);
 }
 
-// Find the Plan template literal: var Bk=`<!DOCTYPE html>...`;var c26=Bk
-var tmplStart = data.indexOf('var Bk=`<!DOCTYPE html>');
-if (tmplStart === -1) { console.log('Plan template not found'); process.exit(0); }
-var tmplEnd = data.indexOf('`;var c26=Bk', tmplStart);
+// Find the Plan template literal — variable name changes between Claude Code versions
+var tmplMatch = data.match(/var ([A-Za-z0-9_]+)=`<!DOCTYPE html>/);
+if (!tmplMatch) { console.log('Plan template not found'); process.exit(0); }
+var varName = tmplMatch[1];
+
+// Safety: make sure there's only one DOCTYPE template in the file
+var allDocTypes = data.match(/var [A-Za-z0-9_]+=`<!DOCTYPE html>/g) || [];
+if (allDocTypes.length !== 1) { console.log('Plan template not found (ambiguous)'); process.exit(0); }
+
+var tmplStart = data.indexOf('var ' + varName + '=`<!DOCTYPE html>');
+var tmplEnd = data.indexOf('`;var ', tmplStart);
 if (tmplEnd === -1) { console.log('Plan template end not found'); process.exit(0); }
+
+// Safety: verify expected structure before touching anything
+var tmplCheck = data.substring(tmplStart, tmplEnd);
+if (!tmplCheck.includes('</style>') || !tmplCheck.includes("vscode.postMessage({ type: 'ready' });")) {
+  console.log('Plan template structure unexpected — skipping');
+  process.exit(0);
+}
 
 var before = data.substring(0, tmplStart);
 var tmpl = data.substring(tmplStart, tmplEnd);
