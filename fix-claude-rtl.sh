@@ -235,3 +235,30 @@ done
 if [ "$FOUND" = false ]; then
   exit 0
 fi
+
+# ── Register SessionStart hook in ~/.claude/settings.json ────────────────────
+SETTINGS="$HOME/.claude/settings.json"
+HOOK_CMD="bash $SCRIPT_DIR/fix-claude-rtl.sh"
+SCRIPT_ID="fix-claude-rtl.sh"
+
+SETTINGS_PATH="$SETTINGS" HOOK_CMD="$HOOK_CMD" SCRIPT_ID="$SCRIPT_ID" \
+node -e "
+var fs = require('fs');
+var p = process.env.SETTINGS_PATH;
+var cmd = process.env.HOOK_CMD;
+var id = process.env.SCRIPT_ID;
+var s = {};
+if (fs.existsSync(p)) { try { s = JSON.parse(fs.readFileSync(p,'utf8')); } catch(e) {} }
+if (!s.hooks) s.hooks = {};
+if (!s.hooks.SessionStart) s.hooks.SessionStart = [];
+var already = s.hooks.SessionStart.some(function(h){
+  return h.hooks && h.hooks.some(function(hh){ return hh.command && hh.command.indexOf(id) !== -1; });
+});
+if (!already) {
+  s.hooks.SessionStart.push({ hooks: [{ type: 'command', command: cmd }] });
+  fs.writeFileSync(p, JSON.stringify(s, null, 2), 'utf8');
+  console.log('Hook registered:', cmd);
+} else {
+  console.log('Hook already registered');
+}
+" 2>/dev/null || echo "Note: could not register hook (node not found)"
