@@ -165,26 +165,9 @@ Step 2 — Download both files from the repo and save them to scripts/:
 
 Step 3 — Create scripts/rtl-mode.conf with the content: full
 
-Step 4 — Add a SessionStart hook to ~/.claude/settings.json:
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash FULL_PATH/scripts/fix-claude-rtl.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
-Replace FULL_PATH with the absolute path to your project's scripts directory.
+Step 4 — Run the script once to apply the fix.
 
-Step 5 — Run the script once to apply the fix.
-
-Step 6 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window).
+Step 5 — Ask me to do Reload Window (Ctrl+Shift+P → Developer: Reload Window).
 ```
 
 </div>
