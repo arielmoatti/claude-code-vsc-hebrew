@@ -209,6 +209,37 @@ CSSPATCH
       if(c){obs.disconnect();initContainer(c);}
     }).observe(document.body,{childList:true,subtree:true});
   }
+
+  /* --- Sidebar session history: per-item RTL/LTR alignment --- */
+  function processHistoryList(){
+    var items=document.querySelectorAll('[class*="sessionItem_"]');
+    items.forEach(function(item){
+      var name=item.querySelector('[class*="sessionName_"]');
+      if(!name)return;
+      var dir=detectDir(name.textContent);
+      if(dir==='rtl'){
+        name.style.setProperty('direction','rtl','important');
+        name.style.setProperty('text-align','right','important');
+      } else {
+        name.style.setProperty('direction','ltr','important');
+        name.style.setProperty('text-align','left','important');
+      }
+    });
+    var btn=document.querySelectorAll('[class*="sessionsButtonText_"]');
+    btn.forEach(function(el){
+      var dir=detectDir(el.textContent);
+      if(dir==='rtl'){
+        el.style.setProperty('direction','rtl','important');
+        el.style.setProperty('text-align','right','important');
+      } else {
+        el.style.setProperty('direction','ltr','important');
+        el.style.setProperty('text-align','left','important');
+      }
+    });
+  }
+  processHistoryList();
+  new MutationObserver(function(){processHistoryList();})
+    .observe(document.body,{childList:true,subtree:true});
 })();
 /* Claude RTL JS End */
 JSPATCH
