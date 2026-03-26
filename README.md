@@ -106,7 +106,7 @@ MutationObserver נוסף על <code dir="ltr">#root</code> עוקב אחרי:
 הסקריפט רשום כ-**SessionStart hook** בקובץ <code dir="ltr">~/.claude/settings.json</code>. כל פעם שנפתח סשן חדש של Claude Code:
 
 1. הסקריפט רץ אוטומטית
-2. סורק את **כל** גרסאות התוסף המותקנות (<code dir="ltr">~/.vscode/extensions/anthropic.claude-code-*/webview/</code>)
+2. סורק את **כל** גרסאות התוסף המותקנות (<code dir="ltr">~/.vscode-server/extensions/</code> ב-Remote SSH, או <code dir="ltr">~/.vscode/extensions/</code> בהתקנה מקומית)
 3. לכל גרסה — מסיר פאטץ׳ ישן (אם קיים) ומחיל את החדש
 4. אם אין מה לתקן — לא עושה כלום
 
