@@ -25,11 +25,6 @@ for dir in "$HOME/.vscode/extensions"/anthropic.claude-code-*/webview; do
   FOUND=true
   CHANGED=false
 
-  if grep -q "bidi-override" "$css"; then
-    sed -i 's/unicode-bidi:[[:space:]]*bidi-override/unicode-bidi: normal/g' "$css"
-    CHANGED=true
-  fi
-
   HAS_CSS_PATCH=false
   if grep -qF "$CSS_PATCH_START" "$css"; then
     HAS_CSS_PATCH=true
