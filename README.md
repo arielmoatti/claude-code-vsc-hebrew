@@ -134,6 +134,22 @@ MutationObserver נוסף על <code dir="ltr">#root</code> עוקב אחרי:
 
 ![תיקון RTL בחלונית דיאלוג](images/dialog-rtl-fix.jpg)
 
+### שלב 6: תיקון טבלאות
+
+<p dir="rtl">&#x200F;טבלאות Markdown ברירת המחדל נשארות LTR גם כשהתוכן כולו עברי — העמודה הראשונה תמיד בשמאל, והקריאה הולכת משמאל לימין. הסיבה: <code dir="ltr">unicode-bidi: isolate</code> על תאים (שלב 2) מטפל רק בטקסט <em>בתוך</em> תא, לא בסדר העמודות. סדר העמודות תלוי ב-<code dir="ltr">direction</code> של ה-<code dir="ltr">&lt;table&gt;</code> עצמו.</p>
+
+<p dir="rtl">&#x200F;הפאטץ' מוסיף handler ייעודי לכל טבלה:</p>
+
+<ul dir="rtl">
+<li>מצבר את הטקסט של כל התאים (<code dir="ltr">th</code> + <code dir="ltr">td</code>) ומריץ את אותו אלגוריתם זיהוי (first-strong + סף 30%)</li>
+<li>אם רוב עברית ← מגדיר <code dir="ltr">direction: rtl</code> על ה-<code dir="ltr">&lt;table&gt;</code> — סדר העמודות מתהפך, העמודה הראשונה עוברת לימין</li>
+<li>בנוסף, מיישר את הטבלה עצמה לימין (<code dir="ltr">margin-left: auto; margin-right: 0</code>) — כי טבלה ברוחב טבעי מתיישרת כברירת מחדל לשמאל ונראית תלושה מהקשר העברי</li>
+<li>טבלה באנגלית נשארת LTR ומיושרת לשמאל</li>
+<li>ה-MutationObserver מזהה טבלאות חדשות שנוצרות תוך כדי streaming של תגובת קלוד, ומעדכן את הכיוון בזמן אמת תוך כדי שהתאים מתמלאים</li>
+</ul>
+
+![תיקון RTL בטבלאות](images/table-rtl.jpg)
+
 ### דוגמאות לזיהוי
 
 <div dir="ltr">

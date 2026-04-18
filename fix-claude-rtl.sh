@@ -163,6 +163,24 @@ CSSPATCH
     }
   }
 
+  /* --- Table direction: flip column order based on cell content --- */
+  function setTableDir(el){
+    if(!el||el.tagName!=='TABLE')return;
+    var cells=el.querySelectorAll('th,td');
+    var text='';
+    for(var i=0;i<cells.length;i++){text+=cells[i].textContent+' ';}
+    var dir=detectDir(text);
+    if(dir==='rtl'){
+      el.style.setProperty('direction','rtl','important');
+      el.style.setProperty('margin-left','auto','important');
+      el.style.setProperty('margin-right','0','important');
+    } else if(dir==='ltr'){
+      el.style.setProperty('direction','ltr','important');
+      el.style.setProperty('margin-left','0','important');
+      el.style.setProperty('margin-right','auto','important');
+    }
+  }
+
   function watchUserDir(el){
     setUserDir(el);
     new MutationObserver(function(){setUserDir(el);})
@@ -173,12 +191,18 @@ CSSPATCH
     if(!container)return;
     container.querySelectorAll(SEL).forEach(setDir);
     container.querySelectorAll(USER_SEL).forEach(watchUserDir);
+    container.querySelectorAll('table').forEach(setTableDir);
     new MutationObserver(function(muts){
       for(var i=0;i<muts.length;i++){
         var m=muts[i];
         if(m.type==='characterData'){
-          var p=m.target.parentElement&&m.target.parentElement.closest(SEL);
-          if(p)setDir(p);
+          var parent=m.target.parentElement;
+          if(parent){
+            var p=parent.closest(SEL);
+            if(p)setDir(p);
+            var t=parent.closest('table');
+            if(t)setTableDir(t);
+          }
           continue;
         }
         for(var j=0;j<m.addedNodes.length;j++){
@@ -186,10 +210,14 @@ CSSPATCH
           if(nd.nodeType!==1)continue;
           if(nd.matches&&nd.matches(SEL))setDir(nd);
           if(nd.matches&&nd.matches(USER_SEL))watchUserDir(nd);
+          if(nd.tagName==='TABLE')setTableDir(nd);
           if(nd.querySelectorAll){
             nd.querySelectorAll(SEL).forEach(setDir);
             nd.querySelectorAll(USER_SEL).forEach(watchUserDir);
+            nd.querySelectorAll('table').forEach(setTableDir);
           }
+          var ct=nd.closest&&nd.closest('table');
+          if(ct)setTableDir(ct);
         }
       }
     }).observe(container,{childList:true,subtree:true,characterData:true});
