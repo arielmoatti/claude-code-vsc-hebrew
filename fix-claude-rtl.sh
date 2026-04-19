@@ -127,6 +127,29 @@ CSSPATCH
     el.insertBefore(document.createTextNode(RLM),first);
   }
 
+  /* --- Flip horizontal arrows in RTL context (Unicode doesn't auto-mirror) --- */
+  var ARROW_FLIP={'\u2192':'\u2190','\u27F6':'\u27F5','\u21D2':'\u21D0','\u21E8':'\u21E6','\u21A6':'\u21A4','\u21AA':'\u21A9'};
+  function flipArrows(el){
+    var walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+      var p=n.parentElement;
+      while(p&&p!==el){
+        var tag=p.tagName;
+        if(tag==='PRE'||tag==='CODE')return NodeFilter.FILTER_REJECT;
+        p=p.parentElement;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    }});
+    var n;
+    while(n=walker.nextNode()){
+      var t=n.textContent,out='',changed=false;
+      for(var i=0;i<t.length;i++){
+        var ch=t.charAt(i),rep=ARROW_FLIP[ch];
+        if(rep){out+=rep;changed=true;}else{out+=ch;}
+      }
+      if(changed)n.textContent=out;
+    }
+  }
+
   function getText(el){
     var text='';
     for(var i=0;i<el.childNodes.length;i++){
@@ -145,6 +168,7 @@ CSSPATCH
       el.style.setProperty('direction','rtl','important');
       el.style.setProperty('text-align','right','important');
       injectRLM(el);
+      flipArrows(el);
     } else if(dir==='ltr'){
       el.style.setProperty('direction','ltr','important');
       el.style.setProperty('text-align','left','important');
@@ -157,6 +181,7 @@ CSSPATCH
     if(dir==='rtl'){
       el.style.setProperty('direction','rtl','important');
       el.style.setProperty('text-align','right','important');
+      flipArrows(el);
     } else if(dir==='ltr'){
       el.style.setProperty('direction','ltr','important');
       el.style.setProperty('text-align','left','important');
