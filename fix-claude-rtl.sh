@@ -1,11 +1,19 @@
 #!/bin/bash
+# ── Ensure common binaries are on PATH ────────────────────────────────────
+# The SessionStart hook on Windows can invoke bash with a minimal PATH that
+# misses curl / node. Add Git-Bash + Node defaults so auto-update works.
+for d in "/c/Program Files/Git/usr/bin" "/c/Program Files/Git/mingw64/bin" "/c/Program Files/nodejs" "/usr/bin"; do
+  [ -d "$d" ] && case ":$PATH:" in *":$d:"*);; *) PATH="$PATH:$d";; esac
+done
+export PATH
+
 # ── Package version ───────────────────────────────────────────────────────
 # Bump VERSION only on meaningful code changes (not README-only commits).
 # UPDATE_NOTE + COMPATIBLE_EXT_VERSION are shown to users at session start
 # when auto-update runs.
-VERSION="1.0.3"
+VERSION="1.0.4"
 COMPATIBLE_EXT_VERSION="2.1.119"
-UPDATE_NOTE="יישור משופר לרשימות מקוננות בתוך הודעות משתמש"
+UPDATE_NOTE="תיקון זיהוי curl/node ב-Windows (PATH חסר בתוך SessionStart hook)"
 REMOTE_BASE_URL="https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
