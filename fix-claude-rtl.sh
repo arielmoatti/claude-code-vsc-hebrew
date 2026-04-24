@@ -3,9 +3,9 @@
 # Bump VERSION only on meaningful code changes (not README-only commits).
 # UPDATE_NOTE + COMPATIBLE_EXT_VERSION are shown to users at session start
 # when auto-update runs.
-VERSION="1.0.0"
+VERSION="1.0.1"
 COMPATIBLE_EXT_VERSION="2.1.119"
-UPDATE_NOTE="מנגנון עדכון אוטומטי לחבילת העברית"
+UPDATE_NOTE="יישור משופר לרשימות מקוננות בתוך הודעות משתמש"
 REMOTE_BASE_URL="https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
