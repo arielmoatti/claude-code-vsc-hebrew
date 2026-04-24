@@ -11,9 +11,9 @@ export PATH
 # Bump VERSION only on meaningful code changes (not README-only commits).
 # UPDATE_NOTE + COMPATIBLE_EXT_VERSION are shown to users at session start
 # when auto-update runs.
-VERSION="1.0.4"
+VERSION="1.0.5"
 COMPATIBLE_EXT_VERSION="2.1.119"
-UPDATE_NOTE="תיקון זיהוי curl/node ב-Windows (PATH חסר בתוך SessionStart hook)"
+UPDATE_NOTE="יישור משופר לרשימות מקוננות בתוך הודעות משתמש"
 REMOTE_BASE_URL="https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
