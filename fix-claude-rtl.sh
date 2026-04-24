@@ -3,9 +3,9 @@
 # Bump VERSION only on meaningful code changes (not README-only commits).
 # UPDATE_NOTE + COMPATIBLE_EXT_VERSION are shown to users at session start
 # when auto-update runs.
-VERSION="1.0.1"
+VERSION="1.0.2"
 COMPATIBLE_EXT_VERSION="2.1.119"
-UPDATE_NOTE="יישור משופר לרשימות מקוננות בתוך הודעות משתמש"
+UPDATE_NOTE="תיקון הצגת הודעות עדכון בסשן (עכשיו נראות במלואן)"
 REMOTE_BASE_URL="https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,40 +38,6 @@ AUTO_UPDATE="true"
 if [ -f "$CONF_FILE" ]; then
   val="$(grep '^auto_update=' "$CONF_FILE" | cut -d= -f2-)"
   [ -n "$val" ] && AUTO_UPDATE="$val"
-fi
-
-# ── Auto-update (once per 24h) ────────────────────────────────────────────
-# Fetches BOTH fix-claude-rtl.sh and patch-plan-rtl.js from main, compares
-# VERSION. If newer and .sh syntax-valid and .js non-empty → replaces both
-# and re-executes. Fails open on any error.
-if [ "$AUTO_UPDATE" = "true" ]; then
-  STATE_FILE="$SCRIPT_DIR/.rtl-last-update-check"
-  NOW=$(date +%s)
-  LAST=0
-  [ -f "$STATE_FILE" ] && LAST=$(cat "$STATE_FILE" 2>/dev/null || echo 0)
-  if [ $((NOW - LAST)) -gt 86400 ]; then
-    echo "$NOW" > "$STATE_FILE"
-    TMP_SH="$(mktemp 2>/dev/null || echo "/tmp/rtl-sh-$$.sh")"
-    TMP_JS="$(mktemp 2>/dev/null || echo "/tmp/rtl-js-$$.js")"
-    if curl -fsSL --connect-timeout 3 --max-time 8 -o "$TMP_SH" "$REMOTE_BASE_URL/fix-claude-rtl.sh" 2>/dev/null \
-       && curl -fsSL --connect-timeout 3 --max-time 8 -o "$TMP_JS" "$REMOTE_BASE_URL/patch-plan-rtl.js" 2>/dev/null; then
-      REMOTE_VER="$(grep -m1 '^VERSION=' "$TMP_SH" | sed 's/^VERSION="\(.*\)".*/\1/')"
-      REMOTE_NOTE="$(grep -m1 '^UPDATE_NOTE=' "$TMP_SH" | sed 's/^UPDATE_NOTE="\(.*\)".*/\1/')"
-      REMOTE_EXT_VER="$(grep -m1 '^COMPATIBLE_EXT_VERSION=' "$TMP_SH" | sed 's/^COMPATIBLE_EXT_VERSION="\(.*\)".*/\1/')"
-      if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$VERSION" ] && bash -n "$TMP_SH" 2>/dev/null && [ -s "$TMP_JS" ]; then
-        echo ""
-        echo "💡 חבילת עברית לקלוד קוד (נבדק מול הגרסה: $REMOTE_EXT_VER)"
-        echo "תיקון חדש: $REMOTE_NOTE"
-        echo "משהו לא עובד? פשוט לעשות Reload."
-        echo ""
-        cp "$TMP_SH" "${BASH_SOURCE[0]}"
-        cp "$TMP_JS" "$SCRIPT_DIR/patch-plan-rtl.js"
-        rm -f "$TMP_SH" "$TMP_JS"
-        exec bash "${BASH_SOURCE[0]}" "$@"
-      fi
-    fi
-    rm -f "$TMP_SH" "$TMP_JS"
-  fi
 fi
 
 FOUND=false
@@ -398,3 +364,38 @@ if (!already) {
   console.log('Hook already registered');
 }
 " 2>/dev/null || echo "Note: could not register hook (node not found)"
+
+# ── Auto-update (once per 24h) ────────────────────────────────────────────
+# Runs at the END of the script so the Hebrew notification is the LAST thing
+# printed — Claude Code's SessionStart renderer only shows the last few lines,
+# so placing the update message last guarantees users see it.
+# Fetches BOTH fix-claude-rtl.sh and patch-plan-rtl.js from main, compares
+# VERSION. If newer and .sh syntax-valid and .js non-empty → replaces both
+# on disk for the next session. No exec — today's session already ran the
+# old patches; new code takes effect on the next Reload Window anyway.
+# Fails open on any error.
+if [ "$AUTO_UPDATE" = "true" ]; then
+  STATE_FILE="$SCRIPT_DIR/.rtl-last-update-check"
+  NOW=$(date +%s)
+  LAST=0
+  [ -f "$STATE_FILE" ] && LAST=$(cat "$STATE_FILE" 2>/dev/null || echo 0)
+  if [ $((NOW - LAST)) -gt 86400 ]; then
+    echo "$NOW" > "$STATE_FILE"
+    TMP_SH="$(mktemp 2>/dev/null || echo "/tmp/rtl-sh-$$.sh")"
+    TMP_JS="$(mktemp 2>/dev/null || echo "/tmp/rtl-js-$$.js")"
+    if curl -fsSL --connect-timeout 3 --max-time 8 -o "$TMP_SH" "$REMOTE_BASE_URL/fix-claude-rtl.sh" 2>/dev/null \
+       && curl -fsSL --connect-timeout 3 --max-time 8 -o "$TMP_JS" "$REMOTE_BASE_URL/patch-plan-rtl.js" 2>/dev/null; then
+      REMOTE_VER="$(grep -m1 '^VERSION=' "$TMP_SH" | sed 's/^VERSION="\(.*\)".*/\1/')"
+      REMOTE_NOTE="$(grep -m1 '^UPDATE_NOTE=' "$TMP_SH" | sed 's/^UPDATE_NOTE="\(.*\)".*/\1/')"
+      REMOTE_EXT_VER="$(grep -m1 '^COMPATIBLE_EXT_VERSION=' "$TMP_SH" | sed 's/^COMPATIBLE_EXT_VERSION="\(.*\)".*/\1/')"
+      if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$VERSION" ] && bash -n "$TMP_SH" 2>/dev/null && [ -s "$TMP_JS" ]; then
+        cp "$TMP_SH" "${BASH_SOURCE[0]}"
+        cp "$TMP_JS" "$SCRIPT_DIR/patch-plan-rtl.js"
+        echo "💡 חבילת עברית לקלוד קוד (נבדק מול הגרסה: $REMOTE_EXT_VER)"
+        echo "תיקון חדש: $REMOTE_NOTE"
+        echo "משהו לא עובד? פשוט לעשות Reload."
+      fi
+    fi
+    rm -f "$TMP_SH" "$TMP_JS"
+  fi
+fi
