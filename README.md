@@ -5,6 +5,12 @@ https://github.com/user-attachments/assets/fd6d088b-678a-4300-8764-be10fba1bc6f
 
 בלי התיקון הזה, עברית מוצגת הפוך בתוסף Claude Code — <code>םולש</code> במקום <code>שלום</code>.
 
+<blockquote dir="rtl">
+
+💡 <b>משהו לא עובד? העברית לא מיושרת?</b> קודם כל תעשו <b>Reload Window</b>. כשקלוד קוד או VSCode מתעדכנים באמצע העבודה, התצוגה שרצה בזיכרון נשארת עם הגרסה הישנה עד ש-VSCode נטען מחדש. <code>Ctrl+Shift+P</code> ← <code>Developer: Reload Window</code> פותר את זה ברוב המקרים.
+
+</blockquote>
+
 ## הבעיה
 
 ה-CSS של Claude Code כולל שני כללים שהורסים עברית:
