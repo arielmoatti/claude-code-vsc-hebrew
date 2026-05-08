@@ -49,7 +49,7 @@ if [ -f "$CONF_FILE" ]; then
 fi
 
 FOUND=false
-for dir in "$HOME/.vscode/extensions"/anthropic.claude-code-*/webview; do
+for dir in "$HOME/.vscode/extensions"/anthropic.claude-code-*/webview "$HOME/.vscode-server/extensions"/anthropic.claude-code-*/webview; do
   css="$dir/index.css"
   js="$dir/index.js"
   [ -f "$css" ] || continue
