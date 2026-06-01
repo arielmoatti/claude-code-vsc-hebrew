@@ -7,13 +7,36 @@ for d in "/c/Program Files/Git/usr/bin" "/c/Program Files/Git/mingw64/bin" "/c/P
 done
 export PATH
 
-# ── Package version ───────────────────────────────────────────────────────
-# Bump VERSION only on meaningful code changes (not README-only commits).
-# UPDATE_NOTE + COMPATIBLE_EXT_VERSION are shown to users at session start
-# when auto-update runs.
-VERSION="1.0.5"
-COMPATIBLE_EXT_VERSION="2.1.119"
-UPDATE_NOTE="יישור משופר לרשימות מקוננות בתוך הודעות משתמש"
+# ── Changelog (most recent first) ─────────────────────────────────────────
+# Single source of truth for version + notes. To release: prepend ONE entry to
+# all three arrays. VERSION/UPDATE_NOTE derive from the newest entry, and every
+# bump triggers auto-update. The in-webview banner shows only the last 3 entries
+# flagged MAJOR=1 (substantial, user-facing fixes); cosmetic/meta tweaks
+# (MAJOR=0) still bump the version but stay OUT of the banner. Keep notes free of
+# " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
+# the JS strings.
+COMPATIBLE_EXT_VERSION="2.1.159"
+CHANGELOG_VERS=(  "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "1"     "1"     "1"     )
+CHANGELOG_NOTES=(
+  "הודעות עדכון מופיעות כבאנר בתוך הצ’אט במקום בפלט נסתר."
+  "אתחול הצ’אט כבר לא נתקע: ה-hook כמעט מיידי, במקום תקיעה של עד 60 שניות אחרי שינה."
+  "ההזרקה נטענת מיד ואמינה אחרי שינה/פתיחה מחדש, בלי לדרוש כמה reload-ים."
+)
+VERSION="${CHANGELOG_VERS[0]}"
+UPDATE_NOTE="${CHANGELOG_NOTES[0]}"
+
+# Build a JS array literal of the last 3 MAJOR entries for the banner.
+# Apostrophes -> U+2019 so the single-quoted JS strings can't break; notes hold
+# no  " \ | &  so this is safe as a sed replacement string.
+CHANGELOG_JS="["; _sep=""; _shown=0
+for _i in "${!CHANGELOG_VERS[@]}"; do
+  [ "$_shown" -ge 3 ] && break
+  [ "${CHANGELOG_MAJOR[$_i]}" = "1" ] || continue
+  _v="${CHANGELOG_VERS[$_i]}"; _n="${CHANGELOG_NOTES[$_i]//\'/’}"
+  CHANGELOG_JS="$CHANGELOG_JS$_sep{v:'$_v',n:'$_n'}"; _sep=","; _shown=$((_shown+1))
+done
+CHANGELOG_JS="$CHANGELOG_JS]"
 REMOTE_BASE_URL="https://raw.githubusercontent.com/arielmoatti/claude-code-vsc-hebrew/main"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,6 +71,24 @@ if [ -f "$CONF_FILE" ]; then
   [ -n "$val" ] && AUTO_UPDATE="$val"
 fi
 
+# ── Signature for the fast path ───────────────────────────────────────
+# Short hash of THIS script + patch-plan-rtl.js + the MODE that affects output.
+# It is written as a marker line into each patched file; if the marker is
+# already present, the per-extension loop skips the whole rebuild (see "Fast
+# path"). Any edit to either script or a MODE change invalidates the marker and
+# forces a one-time re-patch. Falls back to "always rebuild" if md5sum is
+# unavailable. NOTE the namespace: "Claude RTL sig:" is deliberately distinct
+# from the UI-extras marker so the two hooks, which patch the SAME index.js,
+# never read each other's marker.
+RTL_SIG=""
+if command -v md5sum >/dev/null 2>&1; then
+  _self_md5="$(md5sum "${BASH_SOURCE[0]}" 2>/dev/null | cut -c1-10)"
+  _plan_md5="$(md5sum "$SCRIPT_DIR/patch-plan-rtl.js" 2>/dev/null | cut -c1-6)"
+  _conf_md5="$(printf '%s' "$MODE" | md5sum 2>/dev/null | cut -c1-6)"
+  RTL_SIG="$_self_md5-$_plan_md5-$_conf_md5"
+fi
+RTL_MARKER="Claude RTL sig:$RTL_SIG"
+
 FOUND=false
 for dir in "$HOME/.vscode/extensions"/anthropic.claude-code-*/webview; do
   css="$dir/index.css"
@@ -56,22 +97,46 @@ for dir in "$HOME/.vscode/extensions"/anthropic.claude-code-*/webview; do
   FOUND=true
   CHANGED=false
 
-  HAS_CSS_PATCH=false
-  if grep -qF "$CSS_PATCH_START" "$css"; then
-    HAS_CSS_PATCH=true
+  # ── Fast path ────────────────────────────────────────────────────────
+  # If both files already carry the current signature marker, there is
+  # nothing to do. Skip WITHOUT building the temp + strip/append passes
+  # (several seconds of wall-clock per session on a minified bundle, far
+  # worse cold after sleep). A blocking SessionStart hook is the #1 cause of
+  # the extension's "Subprocess initialization did not complete within
+  # 60000ms" timeout, so a near-instant no-op here matters: two greps replace
+  # the whole rebuild. Only meaningful in 'full' mode (the marker is only
+  # written when the patch is applied); 'word' mode falls through to the cheap
+  # strip-and-compare below, which converges to a no-op write.
+  if [ "$MODE" = "full" ] && [ -n "$RTL_SIG" ] \
+       && grep -qF "$RTL_MARKER" "$css" 2>/dev/null \
+       && { [ ! -f "$js" ] || grep -qF "$RTL_MARKER" "$js" 2>/dev/null; }; then
+    echo "CLAUDE_RTL_OK (already current): $dir"
+    continue
   fi
 
-  # Remove old patch (v3 or earlier v4) to re-apply cleanly
-  if [ "$HAS_CSS_PATCH" = true ]; then
-    sed -i '/\/\* Claude RTL Patch Start \*\//,/\/\* Claude RTL Patch End \*\//d' "$css"
-    HAS_CSS_PATCH=false
-    CHANGED=true
-  fi
+  # ── CSS ──────────────────────────────────────────────────────────────
+  # Build the desired file in a SAME-DIR temp, then atomically swap it in
+  # ONLY if it differs from what's already on disk. Two reasons:
+  #   (a) no "unpatched window" — the old code did `strip in place` then
+  #       `append`, leaving a brief moment where the file had no patch. If the
+  #       webview read during that gap it loaded raw, unstyled (LTR) UI.
+  #   (b) a no-op resume is now truly no-op — when the file is already current
+  #       we DON'T rewrite it. So a Reload after sleep loads the already-patched
+  #       file instead of racing this hook's rewrite.
+  # In 'word' mode the patch is simply not appended → the temp is the stripped
+  # file, which removes any prior patch.
+  csstmp="$css.rtl.tmp.$$"
+  sed '/\/\* Claude RTL Patch Start \*\//,/\/\* Claude RTL Patch End \*\//d' "$css" > "$csstmp"
+  # Trim trailing blank lines so the rebuild is byte-deterministic. Without
+  # this, the heredoc's leading blank line stacks one extra newline per run,
+  # and the cmp-skip below would never converge (file grows 1 byte/run).
+  sed -i -e :a -e '/^[[:space:]]*$/{$d;N;ba}' "$csstmp"
 
-  if [ "$MODE" = "full" ] && [ "$HAS_CSS_PATCH" = false ]; then
-    cat >> "$css" << CSSPATCH
+  if [ "$MODE" = "full" ]; then
+    cat >> "$csstmp" << CSSPATCH
 
 $CSS_PATCH_START
+/* $RTL_MARKER */
 #root p,#root h1,#root h2,#root h3,#root h4,#root h5,#root h6,
 #root li,#root blockquote,#root td,#root th,#root dd,#root dt,
 #content p,#content h1,#content h2,#content h3,#content h4,#content h5,#content h6,
@@ -103,26 +168,26 @@ $CSS_PATCH_START
 }
 $CSS_PATCH_END
 CSSPATCH
+  fi
+  if cmp -s "$csstmp" "$css"; then
+    rm -f "$csstmp"
+  else
+    mv -f "$csstmp" "$css"
     CHANGED=true
   fi
 
+  # ── JS ───────────────────────────────────────────────────────────────
   if [ -f "$js" ]; then
-    HAS_JS_PATCH=false
-    if grep -qF "$JS_PATCH_START" "$js"; then
-      HAS_JS_PATCH=true
-    fi
+    jstmp="$js.rtl.tmp.$$"
+    sed '/\/\* Claude RTL JS Start \*\//,/\/\* Claude RTL JS End \*\//d' "$js" > "$jstmp"
+    # Trim trailing blank lines (see CSS note above) for a deterministic rebuild.
+    sed -i -e :a -e '/^[[:space:]]*$/{$d;N;ba}' "$jstmp"
 
-    # Remove old JS patch to re-apply cleanly
-    if [ "$HAS_JS_PATCH" = true ]; then
-      sed -i '/\/\* Claude RTL JS Start \*\//,/\/\* Claude RTL JS End \*\//d' "$js"
-      HAS_JS_PATCH=false
-      CHANGED=true
-    fi
-
-    if [ "$MODE" = "full" ] && [ "$HAS_JS_PATCH" = false ]; then
-      cat >> "$js" << 'JSPATCH'
+    if [ "$MODE" = "full" ]; then
+      cat >> "$jstmp" << 'JSPATCH'
 
 /* Claude RTL JS Start */
+/* __RTL_SIG__ */
 ;(function(){
   var HEB_RE=/[\u0590-\u05FF]/;
   var LTR_RE=/[A-Za-z]/;
@@ -320,11 +385,80 @@ CSSPATCH
   new MutationObserver(function(){processHistoryList();})
     .observe(document.body,{childList:true,subtree:true});
 })();
+
+/* ── Update notification banner (in-webview, once per version) ──
+   The SessionStart hook's stdout is NOT shown to the user in the VSCode
+   extension — it only enters the model's context — so the old "echo the
+   update note" approach was invisible to the user. That was the root of the
+   long-standing "update message never appears" bug. This shows the note in
+   OUR injected DOM instead: a dismissible top banner, gated by localStorage so
+   it appears once per new version, with a MAJOR-filtered changelog.
+   Coordination with the UI-extras banner: both are position:fixed at the top,
+   so this one measures the UI banner (if present) and offsets itself below it. */
+;(function(){
+  var VER='__RTL_VERSION__';
+  var KEY='claude-rtl-seen-version';
+  if(!VER||VER.charAt(0)==='_')return;                 /* placeholder not substituted */
+  try{ if(localStorage.getItem(KEY)===VER)return; }catch(e){}
+  var LOG; try{ LOG=__RTL_CHANGELOG__; }catch(e){ LOG=null; }   /* last 3 MAJOR versions */
+  if(!LOG||!LOG.length)LOG=[{v:VER,n:''}];
+  var ID='claude-rtl-update-banner';
+  var UI_ID='claude-ui-update-banner';
+  /* Sit below the UI-extras banner if it exists & is visible, else at top:0. */
+  function place(bar){
+    var ui=document.getElementById(UI_ID);
+    var off=(ui&&ui.offsetParent!==null)?ui.getBoundingClientRect().bottom:0;
+    bar.style.top=off+'px';
+  }
+  function mount(){
+    if(document.getElementById(ID)||!document.body)return;
+    var bar=document.createElement('div');
+    bar.id=ID;
+    bar.dir='rtl';
+    /* z-index 99998 = one below the UI banner (99999) so the UI one wins any overlap during transitions */
+    bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99998;direction:rtl;text-align:right;display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:var(--vscode-editorWidget-background,#252526);border-bottom:1px solid var(--vscode-editorWidget-border,#454545);color:var(--vscode-foreground,#ccc);font-size:12px;line-height:1.45;box-shadow:0 2px 6px rgba(0,0,0,0.35);';
+    var icon=document.createElement('span');icon.textContent='💡';icon.style.cssText='flex-shrink:0;';
+    var txt=document.createElement('div');txt.style.cssText='flex:1;min-width:0;';
+    var t1=document.createElement('div');t1.textContent='חבילת עברית (RTL) עודכנה ל-'+VER;t1.style.cssText='font-weight:700;margin-bottom:3px;';
+    txt.appendChild(t1);
+    LOG.forEach(function(it){
+      var li=document.createElement('div');
+      li.textContent='• '+it.v+(it.n?' - '+it.n:'');
+      li.style.cssText='opacity:0.85;font-size:11px;margin-top:1px;';
+      txt.appendChild(li);
+    });
+    var x=document.createElement('button');x.textContent='✕';x.title='סגור';
+    x.style.cssText='flex-shrink:0;background:none;border:none;color:inherit;cursor:pointer;opacity:0.6;font-size:13px;padding:2px 6px;line-height:1;';
+    x.addEventListener('mouseenter',function(){x.style.opacity='1';});
+    x.addEventListener('mouseleave',function(){x.style.opacity='0.6';});
+    x.addEventListener('click',function(){try{localStorage.setItem(KEY,VER);}catch(e){}bar.remove();});
+    bar.appendChild(icon);bar.appendChild(txt);bar.appendChild(x);
+    document.body.appendChild(bar);
+    place(bar);
+  }
+  mount();
+  /* Retry mount until DOM is ready, and keep re-placing for ~10s so we follow
+     the UI banner appearing late or being dismissed. */
+  var n=0,iv=setInterval(function(){
+    mount();
+    var bar=document.getElementById(ID);
+    if(bar)place(bar);
+    if(++n>50)clearInterval(iv);
+  },200);
+})();
 /* Claude RTL JS End */
 JSPATCH
-      CHANGED=true
-    elif [ "$MODE" = "word" ] && [ "$HAS_JS_PATCH" = true ]; then
-      sed -i '/\/\* Claude RTL JS Start \*\//,/\/\* Claude RTL JS End \*\//d' "$js"
+
+      # Substitute placeholders. CHANGELOG_JS apostrophes are already U+2019,
+      # and the notes hold no  " \ | &  so they are safe as sed replacements.
+      sed -i "s|__RTL_SIG__|$RTL_MARKER|g" "$jstmp"
+      sed -i "s|__RTL_VERSION__|$VERSION|g" "$jstmp"
+      sed -i "s|__RTL_CHANGELOG__|$CHANGELOG_JS|g" "$jstmp"
+    fi
+    if cmp -s "$jstmp" "$js"; then
+      rm -f "$jstmp"
+    else
+      mv -f "$jstmp" "$js"
       CHANGED=true
     fi
   fi
@@ -339,6 +473,8 @@ JSPATCH
 
   if [ "$CHANGED" = true ]; then
     echo "CLAUDE_RTL_PATCHED ($MODE): $dir"
+  else
+    echo "CLAUDE_RTL_OK (already current): $dir"
   fi
 done
 
@@ -374,14 +510,14 @@ if (!already) {
 " 2>/dev/null || echo "Note: could not register hook (node not found)"
 
 # ── Auto-update (once per 24h) ────────────────────────────────────────────
-# Runs at the END of the script so the Hebrew notification is the LAST thing
-# printed — Claude Code's SessionStart renderer only shows the last few lines,
-# so placing the update message last guarantees users see it.
-# Fetches BOTH fix-claude-rtl.sh and patch-plan-rtl.js from main, compares
-# VERSION. If newer and .sh syntax-valid and .js non-empty → replaces both
-# on disk for the next session. No exec — today's session already ran the
-# old patches; new code takes effect on the next Reload Window anyway.
-# Fails open on any error.
+# Runs at the END of the script. The real user-facing notification is the
+# in-webview banner above (the SessionStart hook's stdout is invisible to the
+# user); the Hebrew echo here is kept only as a harmless log/trace line.
+# Fetches BOTH fix-claude-rtl.sh and patch-plan-rtl.js from main, compares the
+# newest CHANGELOG_VERS entry. If newer and .sh syntax-valid and .js non-empty
+# → replaces BOTH on disk atomically for the next session. No exec — today's
+# session already ran the old patches; new code takes effect on the next Reload
+# Window anyway. Fails open on any error.
 if [ "$AUTO_UPDATE" = "true" ]; then
   STATE_FILE="$SCRIPT_DIR/.rtl-last-update-check"
   NOW=$(date +%s)
@@ -393,8 +529,10 @@ if [ "$AUTO_UPDATE" = "true" ]; then
     TMP_JS="$(mktemp 2>/dev/null || echo "/tmp/rtl-js-$$.js")"
     if curl -fsSL --connect-timeout 3 --max-time 8 -o "$TMP_SH" "$REMOTE_BASE_URL/fix-claude-rtl.sh" 2>/dev/null \
        && curl -fsSL --connect-timeout 3 --max-time 8 -o "$TMP_JS" "$REMOTE_BASE_URL/patch-plan-rtl.js" 2>/dev/null; then
-      REMOTE_VER="$(grep -m1 '^VERSION=' "$TMP_SH" | sed 's/^VERSION="\(.*\)".*/\1/')"
-      REMOTE_NOTE="$(grep -m1 '^UPDATE_NOTE=' "$TMP_SH" | sed 's/^UPDATE_NOTE="\(.*\)".*/\1/')"
+      # VERSION now derives from the CHANGELOG_VERS array, so parse the first
+      # quoted entry of that line rather than a literal VERSION= line.
+      REMOTE_VER="$(grep -m1 '^CHANGELOG_VERS=' "$TMP_SH" | grep -oE '"[0-9][^"]*"' | head -1 | tr -d '"')"
+      REMOTE_NOTE="$(grep -A1 '^CHANGELOG_NOTES=' "$TMP_SH" | tail -1 | sed 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
       REMOTE_EXT_VER="$(grep -m1 '^COMPATIBLE_EXT_VERSION=' "$TMP_SH" | sed 's/^COMPATIBLE_EXT_VERSION="\(.*\)".*/\1/')"
       if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$VERSION" ] && bash -n "$TMP_SH" 2>/dev/null && [ -s "$TMP_JS" ]; then
         cp "$TMP_SH" "${BASH_SOURCE[0]}"
