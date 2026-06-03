@@ -15,10 +15,11 @@ export PATH
 # (MAJOR=0) still bump the version but stay OUT of the banner. Keep notes free of
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
-COMPATIBLE_EXT_VERSION="2.1.159"
-CHANGELOG_VERS=(  "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "1"     "1"     "1"     )
+COMPATIBLE_EXT_VERSION="2.1.161"
+CHANGELOG_VERS=(  "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "ברשימה עברית, פריט שמתחיל באנגלית (פקודה, שם שדה, נתיב) מתיישר עכשיו לימין עם שאר הרשימה במקום לבלוט שמאלה. רשימה שכולה אנגלית נשארת מיושרת לשמאל."
   "הודעות עדכון מופיעות כבאנר בתוך הצ’אט במקום בפלט נסתר."
   "אתחול הצ’אט כבר לא נתקע: ה-hook כמעט מיידי, במקום תקיעה של עד 60 שניות אחרי שינה."
   "ההזרקה נטענת מיד ואמינה אחרי שינה/פתיחה מחדש, בלי לדרוש כמה reload-ים."
@@ -195,6 +196,7 @@ CSSPATCH
   var USER_SEL='[class*="userMessage"]';
   var RLM='\u200F';
 
+
   /* --- v4 smart detection: first-strong + 30% threshold --- */
   function detectDir(text){
     if(!text)return null;
@@ -258,6 +260,10 @@ CSSPATCH
 
   function setDir(el){
     if(!el.matches||!el.matches(SEL))return;
+    /* List items are governed as a group by setListDir (a list goes fully RTL
+       iff ANY item leans Hebrew), so skip per-item detection here - it would
+       fight the list-level decision and strand a Latin-only bullet LTR. */
+    if(el.tagName==='LI')return;
     var text=getText(el);
     var dir=detectDir(text);
     if(dir==='rtl'){
@@ -281,6 +287,41 @@ CSSPATCH
     } else if(dir==='ltr'){
       el.style.setProperty('direction','ltr','important');
       el.style.setProperty('text-align','left','important');
+    }
+  }
+
+  /* --- List direction: a whole ul/ol goes RTL iff ANY item leans Hebrew ------
+     Per Ariel's rule: if even one bullet leans Hebrew (starts Hebrew, or is
+     Hebrew-majority via detectDir), the ENTIRE list reads RTL so a lone Latin
+     bullet doesn't stick out left. If NO item leans Hebrew (an all-English /
+     all-code list), leave it LTR - forcing those right just hurts readability.
+     getText() ignores inline code, so a bullet that is only `code` counts as
+     neutral (won't trigger on its own, but inherits the list's RTL when a
+     sibling is Hebrew). */
+  function setListDir(el){
+    if(!el||(el.tagName!=='UL'&&el.tagName!=='OL'))return;
+    var items=el.querySelectorAll(':scope > li');
+    var rtl=false;
+    for(var i=0;i<items.length;i++){
+      if(detectDir(getText(items[i]))==='rtl'){rtl=true;break;}
+    }
+    if(rtl){
+      el.style.setProperty('direction','rtl','important');
+      el.style.setProperty('text-align','right','important');
+      for(var j=0;j<items.length;j++){
+        var li=items[j];
+        li.style.setProperty('direction','rtl','important');
+        li.style.setProperty('text-align','right','important');
+        injectRLM(li);
+        flipArrows(li);
+      }
+    } else {
+      el.style.setProperty('direction','ltr','important');
+      el.style.setProperty('text-align','left','important');
+      for(var k=0;k<items.length;k++){
+        items[k].style.setProperty('direction','ltr','important');
+        items[k].style.setProperty('text-align','left','important');
+      }
     }
   }
 
@@ -313,6 +354,7 @@ CSSPATCH
     container.querySelectorAll(SEL).forEach(setDir);
     container.querySelectorAll(USER_SEL).forEach(watchUserDir);
     container.querySelectorAll('table').forEach(setTableDir);
+    container.querySelectorAll('ul,ol').forEach(setListDir);
     new MutationObserver(function(muts){
       for(var i=0;i<muts.length;i++){
         var m=muts[i];
@@ -323,6 +365,8 @@ CSSPATCH
             if(p)setDir(p);
             var t=parent.closest('table');
             if(t)setTableDir(t);
+            var ul=parent.closest('ul,ol');
+            if(ul)setListDir(ul);
           }
           continue;
         }
@@ -332,13 +376,17 @@ CSSPATCH
           if(nd.matches&&nd.matches(SEL))setDir(nd);
           if(nd.matches&&nd.matches(USER_SEL))watchUserDir(nd);
           if(nd.tagName==='TABLE')setTableDir(nd);
+          if(nd.tagName==='UL'||nd.tagName==='OL')setListDir(nd);
           if(nd.querySelectorAll){
             nd.querySelectorAll(SEL).forEach(setDir);
             nd.querySelectorAll(USER_SEL).forEach(watchUserDir);
             nd.querySelectorAll('table').forEach(setTableDir);
+            nd.querySelectorAll('ul,ol').forEach(setListDir);
           }
           var ct=nd.closest&&nd.closest('table');
           if(ct)setTableDir(ct);
+          var cl=nd.closest&&nd.closest('ul,ol');
+          if(cl)setListDir(cl);
         }
       }
     }).observe(container,{childList:true,subtree:true,characterData:true});
