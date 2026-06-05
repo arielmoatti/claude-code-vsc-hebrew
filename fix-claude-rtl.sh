@@ -15,10 +15,11 @@ export PATH
 # (MAJOR=0) still bump the version but stay OUT of the banner. Keep notes free of
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
-COMPATIBLE_EXT_VERSION="2.1.161"
-CHANGELOG_VERS=(  "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "1"     "1"     "1"     "1"     )
+COMPATIBLE_EXT_VERSION="2.1.165"
+CHANGELOG_VERS=(  "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "תיקון המשך ליישור רשימות: פריט באנגלית בתוך רשימה עברית נשאר מיושר לשמאל גם אחרי v1.4.0 כשתוכן הפריט עטוף בפסקה (רשימות עם רווח בין הפריטים). עכשיו כל הרשימה מתיישרת לימין באופן עקבי."
   "ברשימה עברית, פריט שמתחיל באנגלית (פקודה, שם שדה, נתיב) מתיישר עכשיו לימין עם שאר הרשימה במקום לבלוט שמאלה. רשימה שכולה אנגלית נשארת מיושרת לשמאל."
   "הודעות עדכון מופיעות כבאנר בתוך הצ’אט במקום בפלט נסתר."
   "אתחול הצ’אט כבר לא נתקע: ה-hook כמעט מיידי, במקום תקיעה של עד 60 שניות אחרי שינה."
@@ -260,10 +261,14 @@ CSSPATCH
 
   function setDir(el){
     if(!el.matches||!el.matches(SEL))return;
-    /* List items are governed as a group by setListDir (a list goes fully RTL
-       iff ANY item leans Hebrew), so skip per-item detection here - it would
-       fight the list-level decision and strand a Latin-only bullet LTR. */
-    if(el.tagName==='LI')return;
+    /* Anything inside a list item is governed as a group by setListDir (a list
+       goes fully RTL iff ANY item leans Hebrew). Skip per-element detection for
+       the li AND for any block wrapper inside it - "loose" lists wrap each
+       item's content in a <p>, and detecting that <p> on its own would force a
+       Latin-leaning item LTR with !important, overriding the list's RTL decision
+       and stranding the bullet on the left. Let the list (direction inherited +
+       text-align:start from the CSS patch) govern the inner blocks. */
+    if(el.tagName==='LI'||(el.closest&&el.closest('li')))return;
     var text=getText(el);
     var dir=detectDir(text);
     if(dir==='rtl'){
@@ -312,7 +317,12 @@ CSSPATCH
         var li=items[j];
         li.style.setProperty('direction','rtl','important');
         li.style.setProperty('text-align','right','important');
-        injectRLM(li);
+        /* Tight list: text sits directly in the li, so anchor it with an RLM.
+           Loose list: the content is in a block child (<p>) that inherits the
+           li's rtl direction - injecting an RLM into the li would become a stray
+           inline box that drops the marker onto its own line, so skip it there. */
+        var host=li.firstElementChild;
+        if(!(host&&(host.tagName==='P'||host.tagName==='DIV')))injectRLM(li);
         flipArrows(li);
       }
     } else {
