@@ -16,9 +16,10 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 COMPATIBLE_EXT_VERSION="2.1.165"
-CHANGELOG_VERS=(  "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "1"     "1"     "1"     "1"     "1"     )
+CHANGELOG_VERS=(  "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "תיקון יישור לפסקה עברית שמכילה קוד מודגש (bold-code): שם שדה או פקודה באנגלית בתוך הדגשה כבר לא מטה את הפסקה לשמאל, וכל הפסקאות מתיישרות לימין באופן עקבי."
   "תיקון המשך ליישור רשימות: פריט באנגלית בתוך רשימה עברית נשאר מיושר לשמאל גם אחרי v1.4.0 כשתוכן הפריט עטוף בפסקה (רשימות עם רווח בין הפריטים). עכשיו כל הרשימה מתיישרת לימין באופן עקבי."
   "ברשימה עברית, פריט שמתחיל באנגלית (פקודה, שם שדה, נתיב) מתיישר עכשיו לימין עם שאר הרשימה במקום לבלוט שמאלה. רשימה שכולה אנגלית נשארת מיושרת לשמאל."
   "הודעות עדכון מופיעות כבאנר בתוך הצ’אט במקום בפלט נסתר."
@@ -253,8 +254,11 @@ CSSPATCH
     var text='';
     for(var i=0;i<el.childNodes.length;i++){
       var n=el.childNodes[i];
-      if(n.nodeType===3)text+=n.textContent;
-      else if(n.nodeType===1&&!n.matches('pre,code'))text+=n.textContent;
+      if(n.nodeType===3){text+=n.textContent;}
+      else if(n.nodeType===1){
+        if(n.matches('pre,code'))continue;   /* skip code even when wrapped in strong/em/a */
+        text+=getText(n);                     /* recurse so nested code is excluded too */
+      }
     }
     return text;
   }
@@ -454,12 +458,15 @@ CSSPATCH
    Coordination with the UI-extras banner: both are position:fixed at the top,
    so this one measures the UI banner (if present) and offsets itself below it. */
 ;(function(){
-  var VER='__RTL_VERSION__';
+  var LOG; try{ LOG=__RTL_CHANGELOG__; }catch(e){ LOG=null; }   /* last 3 MAJOR versions */
+  if(!LOG||!LOG.length)LOG=[{v:'__RTL_VERSION__',n:''}];
+  /* Gate on the newest MAJOR (banner-worthy) version, NOT the absolute VERSION.
+     A MAJOR=0 bump (silent internal fix) thus distributes via auto-update but
+     never re-pops the banner, since LOG[0].v is unchanged. */
+  var VER=LOG[0].v;
   var KEY='claude-rtl-seen-version';
   if(!VER||VER.charAt(0)==='_')return;                 /* placeholder not substituted */
   try{ if(localStorage.getItem(KEY)===VER)return; }catch(e){}
-  var LOG; try{ LOG=__RTL_CHANGELOG__; }catch(e){ LOG=null; }   /* last 3 MAJOR versions */
-  if(!LOG||!LOG.length)LOG=[{v:VER,n:''}];
   var ID='claude-rtl-update-banner';
   var UI_ID='claude-ui-update-banner';
   /* Sit below the UI-extras banner if it exists & is visible, else at top:0. */
