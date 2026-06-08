@@ -16,9 +16,10 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 COMPATIBLE_EXT_VERSION="2.1.165"
-CHANGELOG_VERS=(  "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "0"     "1"     "1"     "1"     "1"     "1"     )
+CHANGELOG_VERS=(  "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "תיקון false positive ביישור: רשימה או פסקה שהיא אנגלית-דומיננטית עם מילים עבריות מפוזרות (או שמתחילה במילה עברית בודדת) כבר לא נדחפת לימין. כיוון של רשימה נקבע עכשיו לפי הטקסט המצרפי של כל הפריטים יחד, ולא לפי פריט עברי בודד."
   "תיקון יישור לפסקה עברית שמכילה קוד מודגש (bold-code): שם שדה או פקודה באנגלית בתוך הדגשה כבר לא מטה את הפסקה לשמאל, וכל הפסקאות מתיישרות לימין באופן עקבי."
   "תיקון המשך ליישור רשימות: פריט באנגלית בתוך רשימה עברית נשאר מיושר לשמאל גם אחרי v1.4.0 כשתוכן הפריט עטוף בפסקה (רשימות עם רווח בין הפריטים). עכשיו כל הרשימה מתיישרת לימין באופן עקבי."
   "ברשימה עברית, פריט שמתחיל באנגלית (פקודה, שם שדה, נתיב) מתיישר עכשיו לימין עם שאר הרשימה במקום לבלוט שמאלה. רשימה שכולה אנגלית נשארת מיושרת לשמאל."
@@ -199,7 +200,13 @@ CSSPATCH
   var RLM='\u200F';
 
 
-  /* --- v4 smart detection: first-strong + 30% threshold --- */
+  /* --- v5 detection: ratio-based with a pro-Hebrew 30% bar ------------------
+     first-strong no longer overrides the proportion. A block that merely STARTS
+     with a Hebrew word/name but is otherwise overwhelmingly English (e.g.
+     "אתי's Schooler enrollment: joined...") now stays LTR instead of flipping
+     RTL on that one leading char. Hebrew still wins on a low 30% bar, so
+     genuinely mixed-but-Hebrew-leaning text goes RTL. firstStrong is kept only
+     to distinguish "no strong char at all" (neutral -> null) from real text. */
   function detectDir(text){
     if(!text)return null;
     var firstStrong=null, rtl=0, ltr=0;
@@ -214,7 +221,6 @@ CSSPATCH
       }
     }
     if(firstStrong===null)return null;
-    if(firstStrong==='rtl')return'rtl';
     var total=rtl+ltr;
     if(total>0&&(rtl/total)>=0.3)return'rtl';
     return'ltr';
@@ -299,21 +305,23 @@ CSSPATCH
     }
   }
 
-  /* --- List direction: a whole ul/ol goes RTL iff ANY item leans Hebrew ------
-     Per Ariel's rule: if even one bullet leans Hebrew (starts Hebrew, or is
-     Hebrew-majority via detectDir), the ENTIRE list reads RTL so a lone Latin
-     bullet doesn't stick out left. If NO item leans Hebrew (an all-English /
-     all-code list), leave it LTR - forcing those right just hurts readability.
-     getText() ignores inline code, so a bullet that is only `code` counts as
-     neutral (won't trigger on its own, but inherits the list's RTL when a
-     sibling is Hebrew). */
+  /* --- List direction: decided by the AGGREGATE text of all items -----------
+     A whole ul/ol goes RTL iff the COMBINED text of its bullets leans Hebrew
+     (detectDir on the concatenation, same as setTableDir). This replaces the
+     old "ANY item leans Hebrew -> whole list RTL" rule, which over-triggered:
+     an English-dominant list with a few Hebrew terms/names sprinkled in (or one
+     bullet that merely starts with a Hebrew word) used to flip the entire list
+     right, stranding genuinely-English bullets on the right. Now the list
+     reflects its dominant language. Trade-off: a Hebrew list carrying long
+     English paths/commands could dip under the 30% bar and stay LTR - acceptable
+     for the common case (English answers with sprinkled Hebrew terms).
+     getText() ignores inline code, so `code`-only bullets stay neutral. */
   function setListDir(el){
     if(!el||(el.tagName!=='UL'&&el.tagName!=='OL'))return;
     var items=el.querySelectorAll(':scope > li');
-    var rtl=false;
-    for(var i=0;i<items.length;i++){
-      if(detectDir(getText(items[i]))==='rtl'){rtl=true;break;}
-    }
+    var agg='';
+    for(var i=0;i<items.length;i++){agg+=getText(items[i])+' ';}
+    var rtl=detectDir(agg)==='rtl';
     if(rtl){
       el.style.setProperty('direction','rtl','important');
       el.style.setProperty('text-align','right','important');
