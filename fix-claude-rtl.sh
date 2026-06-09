@@ -16,8 +16,8 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 COMPATIBLE_EXT_VERSION="2.1.169"
-CHANGELOG_VERS=(  "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "1"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+CHANGELOG_VERS=(  "1.5.3" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
   "הפצ׳ חל עכשיו על כל סוגי VS Code: מקומי, Insiders ו-Remote SSH (Codespaces / Dev Containers), לא רק על ההתקנה המקומית. בנוסף, תיקון תצוגת ה-Plan חוזר לעבוד בגרסאות Claude Code חדשות (זיהוי סובלני של הודעת ה-ready)."
   "תיקון false positive ביישור: רשימה או פסקה שהיא אנגלית-דומיננטית עם מילים עבריות מפוזרות (או שמתחילה במילה עברית בודדת) כבר לא נדחפת לימין. כיוון של רשימה נקבע עכשיו לפי הטקסט המצרפי של כל הפריטים יחד, ולא לפי פריט עברי בודד."
