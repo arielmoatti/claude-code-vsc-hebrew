@@ -5,6 +5,10 @@ var extPath = process.argv[2];
 if (!extPath) { console.log('Usage: node patch-plan-rtl.js <extension.js path>'); process.exit(1); }
 
 var MARKER = 'Claude RTL Plan Patch';
+// The `ready` handshake's exact form varies between Claude Code builds
+// (trailing semicolon / quote style / spacing). Match it tolerantly so the
+// patch keeps applying across versions.
+var readyRe = /vscode\.postMessage\(\{\s*type:\s*['"]ready['"]\s*\}\);?/;
 var data = fs.readFileSync(extPath, 'utf8');
 
 if (data.indexOf(MARKER) !== -1) {
@@ -27,7 +31,7 @@ if (tmplEnd === -1) { console.log('Plan template end not found'); process.exit(0
 
 // Safety: verify expected structure before touching anything
 var tmplCheck = data.substring(tmplStart, tmplEnd);
-if (!tmplCheck.includes('</style>') || !tmplCheck.includes("vscode.postMessage({ type: 'ready' });")) {
+if (!tmplCheck.includes('</style>') || !readyRe.test(tmplCheck)) {
   console.log('Plan template structure unexpected — skipping');
   process.exit(0);
 }
@@ -90,8 +94,8 @@ var rtlJS = [
   '})();'
 ].join('');
 
-var readyMsg = "vscode.postMessage({ type: 'ready' });";
-tmpl = tmpl.replace(readyMsg, rtlJS + readyMsg);
+var readyMatch = tmpl.match(readyRe);
+tmpl = tmpl.replace(readyRe, rtlJS + readyMatch[0]);
 
 fs.writeFileSync(extPath, before + tmpl + after, 'utf8');
 console.log('Plan template patched');
