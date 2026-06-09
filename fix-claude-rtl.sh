@@ -94,7 +94,9 @@ fi
 RTL_MARKER="Claude RTL sig:$RTL_SIG"
 
 FOUND=false
-for dir in "$HOME/.vscode/extensions"/anthropic.claude-code-*/webview; do
+# Scan both stable VS Code (~/.vscode) and Insiders (~/.vscode-insiders), whose
+# extensions live in separate dirs — without this, Insiders users get no patch.
+for dir in "$HOME"/.vscode{,-insiders}/extensions/anthropic.claude-code-*/webview; do
   css="$dir/index.css"
   js="$dir/index.js"
   [ -f "$css" ] || continue
