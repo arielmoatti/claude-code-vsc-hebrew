@@ -16,7 +16,7 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 COMPATIBLE_EXT_VERSION="2.1.169"
-CHANGELOG_VERS=(  "1.5.3" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_VERS=(  "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
 CHANGELOG_MAJOR=( "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
   "הפצ׳ חל עכשיו על כל סוגי VS Code: מקומי, Insiders ו-Remote SSH (Codespaces / Dev Containers), לא רק על ההתקנה המקומית. בנוסף, תיקון תצוגת ה-Plan חוזר לעבוד בגרסאות Claude Code חדשות (זיהוי סובלני של הודעת ה-ready)."
@@ -472,15 +472,16 @@ CSSPATCH
    Coordination with the UI-extras banner: both are position:fixed at the top,
    so this one measures the UI banner (if present) and offsets itself below it. */
 ;(function(){
-  var LOG; try{ LOG=__RTL_CHANGELOG__; }catch(e){ LOG=null; }   /* last 3 MAJOR versions */
-  if(!LOG||!LOG.length)LOG=[{v:'__RTL_VERSION__',n:''}];
-  /* Gate on the newest MAJOR (banner-worthy) version, NOT the absolute VERSION.
-     A MAJOR=0 bump (silent internal fix) thus distributes via auto-update but
-     never re-pops the banner, since LOG[0].v is unchanged. */
-  var VER=LOG[0].v;
+  var VER='__RTL_VERSION__';
   var KEY='claude-rtl-seen-version';
   if(!VER||VER.charAt(0)==='_')return;                 /* placeholder not substituted */
-  try{ if(localStorage.getItem(KEY)===VER)return; }catch(e){}
+  var LOG; try{ LOG=__RTL_CHANGELOG__; }catch(e){ LOG=null; }   /* last 3 MAJOR versions */
+  if(!LOG||!LOG.length)LOG=[{v:VER,n:''}];
+  /* Pop only when there is a NEW MAJOR entry since the user last dismissed.
+     LOG[0].v is the latest MAJOR version; a MAJOR=0 bump (maintenance/cosmetic)
+     leaves LOG[0] unchanged, so the banner stays silent on those releases. */
+  var TOP=LOG[0].v;
+  try{ if(localStorage.getItem(KEY)===TOP)return; }catch(e){}
   var ID='claude-rtl-update-banner';
   var UI_ID='claude-ui-update-banner';
   /* Sit below the UI-extras banner if it exists & is visible, else at top:0. */
@@ -510,7 +511,7 @@ CSSPATCH
     x.style.cssText='flex-shrink:0;background:none;border:none;color:inherit;cursor:pointer;opacity:0.6;font-size:13px;padding:2px 6px;line-height:1;';
     x.addEventListener('mouseenter',function(){x.style.opacity='1';});
     x.addEventListener('mouseleave',function(){x.style.opacity='0.6';});
-    x.addEventListener('click',function(){try{localStorage.setItem(KEY,VER);}catch(e){}bar.remove();});
+    x.addEventListener('click',function(){try{localStorage.setItem(KEY,TOP);}catch(e){}bar.remove();});
     bar.appendChild(icon);bar.appendChild(txt);bar.appendChild(x);
     document.body.appendChild(bar);
     place(bar);
