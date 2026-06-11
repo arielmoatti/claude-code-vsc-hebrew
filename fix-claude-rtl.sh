@@ -16,9 +16,10 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 COMPATIBLE_EXT_VERSION="2.1.170"
-CHANGELOG_VERS=(  "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+CHANGELOG_VERS=(  "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "גרסת חבילת העברית מוצגת עכשיו בשורת הגרסה של חבילת ה-UI (קליק ימני על מד הקונטקסט), כששתי החבילות מותקנות יחד."
   "רשת ביטחון חדשה: תווי-בריחה גלויים של סימני כיווניות שמודל מקליד לפעמים בטעות לתוך טקסט הצ'אט מוסרים עכשיו אוטומטית מהתצוגה. קוד אמיתי שמדבר על התווים האלה לא מושפע."
   "הפצ׳ חל עכשיו על כל סוגי VS Code: מקומי, Insiders ו-Remote SSH (Codespaces / Dev Containers), לא רק על ההתקנה המקומית. בנוסף, תיקון תצוגת ה-Plan חוזר לעבוד בגרסאות Claude Code חדשות (זיהוי סובלני של הודעת ה-ready)."
   "תיקון false positive ביישור: רשימה או פסקה שהיא אנגלית-דומיננטית עם מילים עבריות מפוזרות (או שמתחילה במילה עברית בודדת) כבר לא נדחפת לימין. כיוון של רשימה נקבע עכשיו לפי הטקסט המצרפי של כל הפריטים יחד, ולא לפי פריט עברי בודד."
@@ -205,6 +206,11 @@ CSSPATCH
   var SEL='p,h1,h2,h3,h4,h5,h6,li,blockquote,td,th,dd,dt,[class*="questionText_"],[class*="questionTextLarge_"],[class*="optionLabel_"],[class*="optionDescription_"]';
   var USER_SEL='[class*="userMessage"]';
   var RLM='\u200F';
+
+  /* Publish the running RTL version for other packs to display (the UI-extras
+     version line reads this lazily on right-click). Cross-pack handshake via a
+     window global only - each pack stays fully functional without the other. */
+  try{window.__ccRtlVersion='__RTL_VERSION__';}catch(e){}
 
 
   /* --- v5 detection: ratio-based with a pro-Hebrew 30% bar ------------------
