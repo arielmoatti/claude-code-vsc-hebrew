@@ -16,9 +16,10 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 COMPATIBLE_EXT_VERSION="2.1.173"
-CHANGELOG_VERS=(  "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+CHANGELOG_VERS=(  "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "תיקון באנר העדכון: לחיצה על X סוגרת אותו סופית - עד עכשיו הוא היה נטען מחדש תוך רגע במשך 10 שניות אחרי הסגירה, ולפעמים גם בפתיחת חלון חדש. הבאנר גם מופיע עכשיו רק אחרי שהחלון מתייצב."
   "עדכונים נפרסים עכשיו תוך דקות במקום עד יממה: בדיקת העדכון רצה ברקע בכל פתיחת צ'אט בלי להאט אותו, וכשעדכון ירד והותקן - קלוד מודיע בצ'אט שצריך Reload כדי להפעיל אותו."
   "גרסת חבילת העברית מוצגת עכשיו בשורת הגרסה של חבילת ה-UI (קליק ימני על מד הקונטקסט), כששתי החבילות מותקנות יחד."
   "רשת ביטחון חדשה: תווי-בריחה גלויים של סימני כיווניות שמודל מקליד לפעמים בטעות לתוך טקסט הצ'אט מוסרים עכשיו אוטומטית מהתצוגה. קוד אמיתי שמדבר על התווים האלה לא מושפע."
@@ -515,8 +516,10 @@ CSSPATCH
    long-standing "update message never appears" bug. This shows the note in
    OUR injected DOM instead: a dismissible top banner, gated by localStorage so
    it appears once per new version, with a MAJOR-filtered changelog.
-   Coordination with the UI-extras banner: both are position:fixed at the top,
-   so this one measures the UI banner (if present) and offsets itself below it. */
+   Coordination with the UI-extras banner: deterministic stacking - this banner
+   always sits at top:0 and the UI-extras banner (v1.21.0+) anchors itself
+   below it, so neither follows the other (the old mutual-follow could
+   ping-pong while both were visible). */
 ;(function(){
   var VER='__RTL_VERSION__';
   var KEY='claude-rtl-seen-version';
@@ -527,17 +530,26 @@ CSSPATCH
      LOG[0].v is the latest MAJOR version; a MAJOR=0 bump (maintenance/cosmetic)
      leaves LOG[0] unchanged, so the banner stays silent on those releases. */
   var TOP=LOG[0].v;
-  try{ if(localStorage.getItem(KEY)===TOP)return; }catch(e){}
+  /* Gate on "seen >= TOP", not exact match - exact match re-pops when a
+     transiently-deployed higher version was dismissed and TOP then went back
+     down (the UI repo hit this live 2026-06-10, fixed there in v1.17.1). */
+  function vge(a,b){a=String(a).split('.');b=String(b).split('.');for(var i=0;i<3;i++){var x=+a[i]||0,y=+b[i]||0;if(x!==y)return x>y;}return true;}
+  function dismissed(){try{var s=localStorage.getItem(KEY);return !!(s&&vge(s,TOP));}catch(e){return false;}}
+  if(dismissed())return;
   var ID='claude-rtl-update-banner';
-  var UI_ID='claude-ui-update-banner';
-  /* Sit below the UI-extras banner if it exists & is visible, else at top:0. */
-  function place(bar){
-    var ui=document.getElementById(UI_ID);
-    var off=(ui&&ui.offsetParent!==null)?ui.getBoundingClientRect().bottom:0;
-    bar.style.top=off+'px';
+  /* Persist the dismissal with retries: localStorage writes are flushed to
+     disk asynchronously (Chromium batches ~5s), and VSCode recycles the
+     webview several times while a fresh window settles - a write made just
+     before a recycle is LOST and the banner re-pops on the next incarnation
+     (observed live 2026-06-11). Re-writing the same value every 3s for ~45s
+     makes one of the writes land after the churn. */
+  function persistSeen(){
+    try{localStorage.setItem(KEY,TOP);}catch(e){}
+    var k=0,t=setInterval(function(){try{localStorage.setItem(KEY,TOP);}catch(e){}if(++k>=15)clearInterval(t);},3000);
   }
   function mount(){
     if(document.getElementById(ID)||!document.body)return;
+    if(dismissed())return 'stop';   /* THE v1.9.0 LOOP BUG: the gate ran once at script start only, while the retry loop kept calling mount() for 10s - an X-click (remove + setItem) was undone by the next 200ms tick remounting the banner, for the rest of the 10s window. Re-checking inside mount() makes a dismissal final. */
     var bar=document.createElement('div');
     bar.id=ID;
     bar.dir='rtl';
@@ -557,20 +569,24 @@ CSSPATCH
     x.style.cssText='flex-shrink:0;background:none;border:none;color:inherit;cursor:pointer;opacity:0.6;font-size:13px;padding:2px 6px;line-height:1;';
     x.addEventListener('mouseenter',function(){x.style.opacity='1';});
     x.addEventListener('mouseleave',function(){x.style.opacity='0.6';});
-    x.addEventListener('click',function(){try{localStorage.setItem(KEY,TOP);}catch(e){}bar.remove();});
+    x.addEventListener('click',function(){persistSeen();bar.remove();});
     bar.appendChild(icon);bar.appendChild(txt);bar.appendChild(x);
     document.body.appendChild(bar);
-    place(bar);
+    /* If this version is dismissed in another window/webview sharing the same
+       storage, hide here too instead of waiting for a reload. */
+    window.addEventListener('storage',function(ev){
+      if(ev.key===KEY&&dismissed()&&bar.isConnected)bar.remove();
+    });
   }
-  mount();
-  /* Retry mount until DOM is ready, and keep re-placing for ~10s so we follow
-     the UI banner appearing late or being dismissed. */
-  var n=0,iv=setInterval(function(){
-    mount();
-    var bar=document.getElementById(ID);
-    if(bar)place(bar);
-    if(++n>50)clearInterval(iv);
-  },200);
+  /* Delay the first mount ~10s: while a fresh VSCode window settles, the
+     extension disposes and recreates the webview several times; banners shown
+     during that churn are the ones whose dismissal gets lost. Short-lived
+     incarnations now never show the banner at all, and the surviving one
+     re-reads the gate right before mounting. */
+  setTimeout(function(){
+    if(mount()==='stop')return;
+    var n=0,iv=setInterval(function(){if(mount()==='stop'||++n>50||document.getElementById(ID))clearInterval(iv);},200);
+  },10000);
 })();
 /* Claude RTL JS End */
 JSPATCH
