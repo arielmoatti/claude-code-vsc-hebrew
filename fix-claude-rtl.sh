@@ -15,10 +15,11 @@ export PATH
 # (MAJOR=0) still bump the version but stay OUT of the banner. Keep notes free of
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
-COMPATIBLE_EXT_VERSION="2.1.170"
-CHANGELOG_VERS=(  "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+COMPATIBLE_EXT_VERSION="2.1.173"
+CHANGELOG_VERS=(  "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "עדכונים נפרסים עכשיו תוך דקות במקום עד יממה: בדיקת העדכון רצה ברקע בכל פתיחת צ'אט בלי להאט אותו, וכשעדכון ירד והותקן - קלוד מודיע בצ'אט שצריך Reload כדי להפעיל אותו."
   "גרסת חבילת העברית מוצגת עכשיו בשורת הגרסה של חבילת ה-UI (קליק ימני על מד הקונטקסט), כששתי החבילות מותקנות יחד."
   "רשת ביטחון חדשה: תווי-בריחה גלויים של סימני כיווניות שמודל מקליד לפעמים בטעות לתוך טקסט הצ'אט מוסרים עכשיו אוטומטית מהתצוגה. קוד אמיתי שמדבר על התווים האלה לא מושפע."
   "הפצ׳ חל עכשיו על כל סוגי VS Code: מקומי, Insiders ו-Remote SSH (Codespaces / Dev Containers), לא רק על ההתקנה המקומית. בנוסף, תיקון תצוגת ה-Plan חוזר לעבוד בגרסאות Claude Code חדשות (זיהוי סובלני של הודעת ה-ready)."
@@ -634,39 +635,70 @@ if (!already) {
 }
 " 2>/dev/null || echo "Note: could not register hook (node not found)"
 
-# ── Auto-update (once per 24h) ────────────────────────────────────────────
-# Runs at the END of the script. The real user-facing notification is the
-# in-webview banner above (the SessionStart hook's stdout is invisible to the
-# user); the Hebrew echo here is kept only as a harmless log/trace line.
-# Fetches BOTH fix-claude-rtl.sh and patch-plan-rtl.js from main, compares the
-# newest CHANGELOG_VERS entry. If newer and .sh syntax-valid and .js non-empty
-# → replaces BOTH on disk atomically for the next session. No exec — today's
-# session already ran the old patches; new code takes effect on the next Reload
-# Window anyway. Fails open on any error.
+# ── Auto-update (background, every session) ───────────────────────────────
+# v1.9.0: the check no longer blocks session start and no longer waits 24h.
+# Mirrors the UI-extras repo's mechanism (keep the two aligned).
+#
+# Part 1 — version check, spawned as a DETACHED background job: session start
+# never waits on the network (the old synchronous check cost up to ~3s offline,
+# inside a BLOCKING SessionStart hook). Gated to once per 5 minutes only so
+# rapid-fire new chats don't hammer GitHub. Fetches BOTH fix-claude-rtl.sh and
+# patch-plan-rtl.js from main; when the remote VERSION differs, the .sh passes
+# bash -n and the .js is non-empty, the job swaps BOTH on disk (same-dir temp +
+# atomic mv — never truncate a possibly-running script in place; .js FIRST, so
+# a half-swap leaves old sh + new js and simply retries next time) and leaves a
+# marker file. No exec — this session already ran the old patches.
+#
+# Part 2 — pending-update notice, on the FIRST session that runs the NEW
+# script: the bundle on disk is freshly patched, but the webview in memory may
+# still run the old injection until the window reloads. The hook's stdout is
+# NOT rendered to the user — it lands in Claude's context — so the notice is
+# written as an instruction TO CLAUDE to tell the user to reload. Printed once;
+# after the reload the in-webview changelog banner takes over. (The in-webview
+# banner itself needs no reload line: by the time it shows, the new code is
+# already live.)
+#
+# Fails open on any error. auto_update=false in rtl-mode.conf disables the
+# check (a marker left by an earlier download is still announced — it already
+# happened).
+SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
+NOTE_FILE="$SCRIPT_DIR/.rtl-update-pending"
 if [ "$AUTO_UPDATE" = "true" ]; then
   STATE_FILE="$SCRIPT_DIR/.rtl-last-update-check"
   NOW=$(date +%s)
   LAST=0
   [ -f "$STATE_FILE" ] && LAST=$(cat "$STATE_FILE" 2>/dev/null || echo 0)
-  if [ $((NOW - LAST)) -gt 86400 ]; then
+  if [ $((NOW - LAST)) -gt 300 ]; then
     echo "$NOW" > "$STATE_FILE"
-    TMP_SH="$(mktemp 2>/dev/null || echo "/tmp/rtl-sh-$$.sh")"
-    TMP_JS="$(mktemp 2>/dev/null || echo "/tmp/rtl-js-$$.js")"
-    if curl -fsSL --connect-timeout 3 --max-time 8 -o "$TMP_SH" "$REMOTE_BASE_URL/fix-claude-rtl.sh" 2>/dev/null \
-       && curl -fsSL --connect-timeout 3 --max-time 8 -o "$TMP_JS" "$REMOTE_BASE_URL/patch-plan-rtl.js" 2>/dev/null; then
-      # VERSION now derives from the CHANGELOG_VERS array, so parse the first
-      # quoted entry of that line rather than a literal VERSION= line.
-      REMOTE_VER="$(grep -m1 '^CHANGELOG_VERS=' "$TMP_SH" | grep -oE '"[0-9][^"]*"' | head -1 | tr -d '"')"
-      REMOTE_NOTE="$(grep -A1 '^CHANGELOG_NOTES=' "$TMP_SH" | tail -1 | sed 's/^[[:space:]]*"//; s/"[[:space:]]*$//')"
-      REMOTE_EXT_VER="$(grep -m1 '^COMPATIBLE_EXT_VERSION=' "$TMP_SH" | sed 's/^COMPATIBLE_EXT_VERSION="\(.*\)".*/\1/')"
-      if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$VERSION" ] && bash -n "$TMP_SH" 2>/dev/null && [ -s "$TMP_JS" ]; then
-        cp "$TMP_SH" "${BASH_SOURCE[0]}"
-        cp "$TMP_JS" "$SCRIPT_DIR/patch-plan-rtl.js"
-        echo "💡 חבילת עברית לקלוד קוד (נבדק מול הגרסה: $REMOTE_EXT_VER)"
-        echo "תיקון חדש: $REMOTE_NOTE"
-        echo "משהו לא עובד? פשוט לעשות Reload."
+    (
+      TMP_SH="$(mktemp 2>/dev/null || echo "/tmp/rtl-sh-$$.sh")"
+      TMP_JS="$(mktemp 2>/dev/null || echo "/tmp/rtl-js-$$.js")"
+      if curl -fsSL --connect-timeout 5 --max-time 30 -o "$TMP_SH" "$REMOTE_BASE_URL/fix-claude-rtl.sh" 2>/dev/null \
+         && curl -fsSL --connect-timeout 5 --max-time 30 -o "$TMP_JS" "$REMOTE_BASE_URL/patch-plan-rtl.js" 2>/dev/null; then
+        # VERSION derives from the CHANGELOG_VERS array, so parse the first
+        # quoted entry of that line rather than a literal VERSION= line.
+        REMOTE_VER="$(grep -m1 '^CHANGELOG_VERS=' "$TMP_SH" | grep -oE '"[0-9][^"]*"' | head -1 | tr -d '"')"
+        if [ -n "$REMOTE_VER" ] && [ "$REMOTE_VER" != "$VERSION" ] && bash -n "$TMP_SH" 2>/dev/null && [ -s "$TMP_JS" ]; then
+          cp "$TMP_JS" "$SCRIPT_DIR/patch-plan-rtl.js.new.$$" \
+            && mv -f "$SCRIPT_DIR/patch-plan-rtl.js.new.$$" "$SCRIPT_DIR/patch-plan-rtl.js" \
+            && cp "$TMP_SH" "$SELF.new.$$" && mv -f "$SELF.new.$$" "$SELF" \
+            && echo "$REMOTE_VER" > "$NOTE_FILE"
+        fi
       fi
-    fi
-    rm -f "$TMP_SH" "$TMP_JS"
+      rm -f "$TMP_SH" "$TMP_JS" "$SELF.new.$$" "$SCRIPT_DIR/patch-plan-rtl.js.new.$$"
+    ) </dev/null >/dev/null 2>&1 &
+  fi
+fi
+if [ -f "$NOTE_FILE" ]; then
+  PENDING_VER="$(head -1 "$NOTE_FILE" 2>/dev/null | tr -d '[:space:]')"
+  rm -f "$NOTE_FILE"
+  # Announce only if this process is actually the downloaded version (the swap
+  # happened and the new script is the one running now); a stale/mismatched
+  # marker is silently dropped.
+  if [ "$PENDING_VER" = "$VERSION" ]; then
+    echo ""
+    echo "💡 חבילת העברית (Hebrew RTL) עודכנה אוטומטית לגרסה $VERSION (נבדק מול הגרסה: $COMPATIBLE_EXT_VERSION)"
+    echo "חדש: $UPDATE_NOTE"
+    echo "IMPORTANT instruction to Claude: the Claude Code Hebrew RTL pack was just auto-updated on disk, but the current window still runs the previous version. At the START of your reply, tell the user (in the conversation's language) that a Hebrew RTL update to v$VERSION was installed, briefly what is new (translate the Hebrew note above if needed), and that to activate it they should reload the window: press Ctrl+Shift+P, then run the command: Developer: Reload Window."
   fi
 fi
