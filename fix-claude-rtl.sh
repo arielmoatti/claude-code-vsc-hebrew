@@ -15,10 +15,11 @@ export PATH
 # (MAJOR=0) still bump the version but stay OUT of the banner. Keep notes free of
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
-COMPATIBLE_EXT_VERSION="2.1.169"
-CHANGELOG_VERS=(  "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+COMPATIBLE_EXT_VERSION="2.1.170"
+CHANGELOG_VERS=(  "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "רשת ביטחון חדשה: תווי-בריחה גלויים של סימני כיווניות שמודל מקליד לפעמים בטעות לתוך טקסט הצ'אט מוסרים עכשיו אוטומטית מהתצוגה. קוד אמיתי שמדבר על התווים האלה לא מושפע."
   "הפצ׳ חל עכשיו על כל סוגי VS Code: מקומי, Insiders ו-Remote SSH (Codespaces / Dev Containers), לא רק על ההתקנה המקומית. בנוסף, תיקון תצוגת ה-Plan חוזר לעבוד בגרסאות Claude Code חדשות (זיהוי סובלני של הודעת ה-ready)."
   "תיקון false positive ביישור: רשימה או פסקה שהיא אנגלית-דומיננטית עם מילים עבריות מפוזרות (או שמתחילה במילה עברית בודדת) כבר לא נדחפת לימין. כיוון של רשימה נקבע עכשיו לפי הטקסט המצרפי של כל הפריטים יחד, ולא לפי פריט עברי בודד."
   "תיקון יישור לפסקה עברית שמכילה קוד מודגש (bold-code): שם שדה או פקודה באנגלית בתוך הדגשה כבר לא מטה את הפסקה לשמאל, וכל הפסקאות מתיישרות לימין באופן עקבי."
@@ -275,6 +276,41 @@ CSSPATCH
     return text;
   }
 
+  /* --- Strip leaked direction-mark escape-text from rendered prose -----------
+     A model sometimes types the ESCAPE-TEXT of an RLM/LRM (backslash, u, then
+     the hex digits) straight into chat prose, usually at a Hebrew/Latin seam.
+     The renderer does not interpret escapes, so six visible junk characters
+     land in the text. This removes that escape-text from prose text nodes.
+     Deliberately narrow:
+     - Only the LITERAL escape-text is removed. Real (invisible) RLM/LRM chars
+       are untouched - this very patch injects RLM anchors on purpose
+       (injectRLM), and they are harmless in display anyway.
+     - PRE/CODE subtrees are skipped (same walker filter as flipArrows), so
+       genuine code that discusses these escapes renders exactly as written.
+     - Idempotent: a node is rewritten only when a match was actually removed,
+       so the rewrite-triggered mutation finds nothing on its second pass. */
+  var ESC_TEST=/\\u200[EF]/i;
+  var ESC_ALL=/\\u200[EF]/gi;
+  function stripEscapes(el){
+    if(!el||el.nodeType!==1)return;
+    var walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+      var p=n.parentElement;
+      while(p&&p!==el){
+        var tag=p.tagName;
+        if(tag==='PRE'||tag==='CODE')return NodeFilter.FILTER_REJECT;
+        p=p.parentElement;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    }});
+    var n,batch=[];
+    while(n=walker.nextNode()){
+      if(ESC_TEST.test(n.textContent))batch.push(n);
+    }
+    for(var i=0;i<batch.length;i++){
+      batch[i].textContent=batch[i].textContent.replace(ESC_ALL,'');
+    }
+  }
+
   function setDir(el){
     if(!el.matches||!el.matches(SEL))return;
     /* Anything inside a list item is governed as a group by setListDir (a list
@@ -379,6 +415,7 @@ CSSPATCH
 
   function initContainer(container){
     if(!container)return;
+    stripEscapes(container);
     container.querySelectorAll(SEL).forEach(setDir);
     container.querySelectorAll(USER_SEL).forEach(watchUserDir);
     container.querySelectorAll('table').forEach(setTableDir);
@@ -389,6 +426,7 @@ CSSPATCH
         if(m.type==='characterData'){
           var parent=m.target.parentElement;
           if(parent){
+            if(!(parent.closest&&parent.closest('pre,code')))stripEscapes(parent);
             var p=parent.closest(SEL);
             if(p)setDir(p);
             var t=parent.closest('table');
@@ -401,6 +439,7 @@ CSSPATCH
         for(var j=0;j<m.addedNodes.length;j++){
           var nd=m.addedNodes[j];
           if(nd.nodeType!==1)continue;
+          if(!(nd.closest&&nd.closest('pre,code')))stripEscapes(nd);
           if(nd.matches&&nd.matches(SEL))setDir(nd);
           if(nd.matches&&nd.matches(USER_SEL))watchUserDir(nd);
           if(nd.tagName==='TABLE')setTableDir(nd);
