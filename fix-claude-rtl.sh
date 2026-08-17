@@ -16,9 +16,10 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 COMPATIBLE_EXT_VERSION="2.1.233"
-CHANGELOG_VERS=(  "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+CHANGELOG_VERS=(  "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "חבילת העברית מתקינה את עצמה עכשיו גם ב-Cursor וב-Antigravity, שכל אחד מהם מחזיק עותק נפרד של התוסף, בנוסף לכל טעמי VSCode שכבר נסרקו. כך שתי החבילות מכסות בדיוק את אותם מקומות."
   "תוקנו שני מרוצים בין חבילת העברית לחבילת ה-UI, ששתיהן נטענות בפתיחת כל צאט. הראשון: שתיהן ערכו את אותו קובץ של התוסף באותו רגע, ולכן לפעמים אחת נטענה והשנייה לא, והיה צריך כמה Reload עד ששתיהן תפסו. עכשיו הן ממתינות אחת לשנייה. השני, נדיר אבל הרסני: כשקובץ ההגדרות settings.json לא היה ניתן לקריאה לרגע, הרישום העצמי כתב אותו מחדש מאפס ומחק את כל שאר ה-hooks, את המודל ואת ההרשאות. עכשיו הוא מדלג במקרה כזה, והכתיבה עצמה אטומית."
   "תיקון באנר העדכון: לחיצה על X סוגרת אותו סופית - עד עכשיו הוא היה נטען מחדש תוך רגע במשך 10 שניות אחרי הסגירה, ולפעמים גם בפתיחת חלון חדש. הבאנר גם מופיע עכשיו רק אחרי שהחלון מתייצב."
   "עדכונים נפרסים עכשיו תוך דקות במקום עד יממה: בדיקת העדכון רצה ברקע בכל פתיחת צ'אט בלי להאט אותו, וכשעדכון ירד והותקן - קלוד מודיע בצ'אט שצריך Reload כדי להפעיל אותו."
@@ -128,12 +129,18 @@ done
 [ "$LOCK_HELD" = true ] && trap 'rm -rf "$PATCH_LOCK" 2>/dev/null' EXIT
 
 FOUND=false
-# Scan every VS Code flavour, whose extensions live in separate dirs:
-#   .vscode          stable, local install
-#   .vscode-insiders Insiders build
-#   .vscode-server   Remote SSH / Codespaces / Dev Containers
-# Without this, users on those flavours get no patch at all.
-for dir in "$HOME"/.vscode{,-insiders,-server}/extensions/anthropic.claude-code-*/webview; do
+# Scan every host that keeps its own copy of the extension:
+#   .vscode           stable, local install
+#   .vscode-insiders  Insiders build
+#   .vscode-server    Remote SSH / Codespaces / Dev Containers
+#   .cursor           Cursor
+#   .antigravity      Antigravity
+# Each root is optional - the [ -f "$css" ] guard below skips whatever is not
+# there, so a single-host machine is unaffected. The fork roots are best
+# effort: they are not tested here, they just stop a fork user from silently
+# getting one pack and not the other.
+for dir in "$HOME"/.vscode{,-insiders,-server}/extensions/anthropic.claude-code-*/webview \
+           "$HOME"/{.cursor,.antigravity}/extensions/anthropic.claude-code-*/webview; do
   css="$dir/index.css"
   js="$dir/index.js"
   [ -f "$css" ] || continue
