@@ -15,10 +15,11 @@ export PATH
 # (MAJOR=0) still bump the version but stay OUT of the banner. Keep notes free of
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
-COMPATIBLE_EXT_VERSION="2.1.173"
-CHANGELOG_VERS=(  "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+COMPATIBLE_EXT_VERSION="2.1.233"
+CHANGELOG_VERS=(  "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "תוקנו שני מרוצים בין חבילת העברית לחבילת ה-UI, ששתיהן נטענות בפתיחת כל צאט. הראשון: שתיהן ערכו את אותו קובץ של התוסף באותו רגע, ולכן לפעמים אחת נטענה והשנייה לא, והיה צריך כמה Reload עד ששתיהן תפסו. עכשיו הן ממתינות אחת לשנייה. השני, נדיר אבל הרסני: כשקובץ ההגדרות settings.json לא היה ניתן לקריאה לרגע, הרישום העצמי כתב אותו מחדש מאפס ומחק את כל שאר ה-hooks, את המודל ואת ההרשאות. עכשיו הוא מדלג במקרה כזה, והכתיבה עצמה אטומית."
   "תיקון באנר העדכון: לחיצה על X סוגרת אותו סופית - עד עכשיו הוא היה נטען מחדש תוך רגע במשך 10 שניות אחרי הסגירה, ולפעמים גם בפתיחת חלון חדש. הבאנר גם מופיע עכשיו רק אחרי שהחלון מתייצב."
   "עדכונים נפרסים עכשיו תוך דקות במקום עד יממה: בדיקת העדכון רצה ברקע בכל פתיחת צ'אט בלי להאט אותו, וכשעדכון ירד והותקן - קלוד מודיע בצ'אט שצריך Reload כדי להפעיל אותו."
   "גרסת חבילת העברית מוצגת עכשיו בשורת הגרסה של חבילת ה-UI (קליק ימני על מד הקונטקסט), כששתי החבילות מותקנות יחד."
@@ -97,6 +98,34 @@ if command -v md5sum >/dev/null 2>&1; then
   RTL_SIG="$_self_md5-$_plan_md5-$_conf_md5"
 fi
 RTL_MARKER="Claude RTL sig:$RTL_SIG"
+
+# ── Cross-package patch lock ─────────────────────────────────────────────
+# The UI pack and the Hebrew RTL pack are BOTH SessionStart hooks, they fire
+# at the same instant, and they patch the SAME index.js / index.css. Each one
+# strips only its own marker block and appends its own, so two concurrent runs
+# are a textbook lost update: both read the file, both build their temp from
+# that same snapshot, and whoever mv-s last silently drops the other pack.
+# That is the long-standing "one pack loaded, the other did not, reload a few
+# times until both stick" symptom. One lock shared by both scripts serialises
+# them. mkdir is the primitive because it is atomic, and HOME is the one path
+# both scripts agree on wherever each happens to be installed.
+#
+# Fails OPEN. If the lock cannot be taken inside the ceiling we patch anyway -
+# a SessionStart hook must never hold up the session. Worst case is the old
+# behaviour, never worse than it.
+PATCH_LOCK="$HOME/.claude/.cc-webview-patch.lock"
+LOCK_HELD=false
+mkdir -p "$HOME/.claude" 2>/dev/null
+_lock_try=0
+while [ "$_lock_try" -lt 50 ]; do          # 50 x 0.2s = 10s ceiling
+  if mkdir "$PATCH_LOCK" 2>/dev/null; then LOCK_HELD=true; break; fi
+  # Break a lock orphaned by a killed run (older than 60s).
+  _lock_age=$(( $(date +%s) - $(stat -c %Y "$PATCH_LOCK" 2>/dev/null || date +%s) ))
+  if [ "$_lock_age" -gt 60 ]; then rm -rf "$PATCH_LOCK" 2>/dev/null; continue; fi
+  sleep 0.2
+  _lock_try=$((_lock_try+1))
+done
+[ "$LOCK_HELD" = true ] && trap 'rm -rf "$PATCH_LOCK" 2>/dev/null' EXIT
 
 FOUND=false
 # Scan every VS Code flavour, whose extensions live in separate dirs:
@@ -620,6 +649,10 @@ JSPATCH
   fi
 done
 
+
+# Patching is done - hand the lock straight to the sibling pack instead of
+# holding it through the auto-update section further down.
+if [ "$LOCK_HELD" = true ]; then rm -rf "$PATCH_LOCK" 2>/dev/null; trap - EXIT; LOCK_HELD=false; fi
 if [ "$FOUND" = false ]; then
   exit 0
 fi
@@ -636,7 +669,18 @@ var p = process.env.SETTINGS_PATH;
 var cmd = process.env.HOOK_CMD;
 var id = process.env.SCRIPT_ID;
 var s = {};
-if (fs.existsSync(p)) { try { s = JSON.parse(fs.readFileSync(p,'utf8')); } catch(e) {} }
+// A read that fails for an instant used to fall through to s={} and then
+// rewrite this file from scratch, taking every other hook, the model and the
+// permission rules with it. Claude Code writes the same file (model,
+// effortLevel, the settings-menu toggles) without an atomic swap, and the
+// sibling pack writes it too, so a torn read is a real event, not a theory.
+// On a failed read we skip registration for this session - it runs again on
+// the next one anyway.
+if (fs.existsSync(p)) {
+  try { s = JSON.parse(fs.readFileSync(p,'utf8')); }
+  catch(e) { console.log('settings.json could not be read just now - skipping hook registration rather than risk overwriting it'); process.exit(0); }
+}
+var before = JSON.stringify(s);
 if (!s.hooks) s.hooks = {};
 if (!s.hooks.SessionStart) s.hooks.SessionStart = [];
 var already = s.hooks.SessionStart.some(function(h){
@@ -644,7 +688,15 @@ var already = s.hooks.SessionStart.some(function(h){
 });
 if (!already) {
   s.hooks.SessionStart.push({ hooks: [{ type: 'command', command: cmd }] });
-  fs.writeFileSync(p, JSON.stringify(s, null, 2), 'utf8');
+  // Only touch the file when something actually changed, and swap it in
+  // atomically so nobody can ever read a half-written settings.json from us.
+  // In steady state this writes nothing at all, which removes the race window
+  // instead of merely surviving it.
+  if (JSON.stringify(s) !== before) {
+    var stmp = p + '.tmp' + process.pid;
+    fs.writeFileSync(stmp, JSON.stringify(s, null, 2), 'utf8');
+    fs.renameSync(stmp, p);
+  }
   console.log('Hook registered:', cmd);
 } else {
   console.log('Hook already registered');
