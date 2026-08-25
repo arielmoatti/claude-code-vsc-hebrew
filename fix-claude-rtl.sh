@@ -16,10 +16,11 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 # Notes are benefit-only and capped at 3 rendered lines - see PROJECTS.md.
-COMPATIBLE_EXT_VERSION="2.1.233"
-CHANGELOG_VERS=(  "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+COMPATIBLE_EXT_VERSION="2.1.241"
+CHANGELOG_VERS=(  "1.13.0" "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "1"      "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "שורות הסיכום האפורות של החשיבה (summarized) מתיישרות לימין כמו כל השאר."
   "חבילת העברית מתקינה את עצמה גם ב-Cursor וב-Antigravity, בנוסף לכל טעמי VSCode."
   "שתי החבילות נטענות יחד באמינות, בלי כמה Reload. וקובץ ההגדרות שלכם כבר לא בסכנת דריסה."
   "לחיצה על X בבאנר סוגרת אותו סופית, גם בפתיחת חלון חדש."
@@ -217,6 +218,9 @@ $CSS_PATCH_START
 [class*="questionHeader_"],[class*="questionBlock_"]{
   unicode-bidi:plaintext;text-align:start;
 }
+[class*="narrationSummary_"]{
+  unicode-bidi:isolate;text-align:start;
+}
 $CSS_PATCH_END
 CSSPATCH
   fi
@@ -244,6 +248,10 @@ CSSPATCH
   var LTR_RE=/[A-Za-z]/;
   var SEL='p,h1,h2,h3,h4,h5,h6,li,blockquote,td,th,dd,dt,[class*="questionText_"],[class*="questionTextLarge_"],[class*="optionLabel_"],[class*="optionDescription_"]';
   var USER_SEL='[class*="userMessage"]';
+  /* Summarized-thinking rows ("(summarized)" label + one short paragraph).
+     The paragraph inside is a plain <p> and is covered by SEL; the container
+     gets its own verdict so the label follows the text's side. */
+  var NARR_SEL='[class*="narrationSummary_"]';
   var RLM='\u200F';
 
   /* Publish the running RTL version for other packs to display (the UI-extras
@@ -392,6 +400,65 @@ CSSPATCH
     }
   }
 
+  /* --- Summarized-thinking container: judged by its prose, label excluded ---
+     The "(summarized)" label is Latin and would only dilute the ratio. */
+  function setNarrDir(el){
+    if(!el.matches||!el.matches(NARR_SEL))return;
+    var text='';
+    for(var i=0;i<el.children.length;i++){
+      var ch=el.children[i];
+      if(ch.className&&String(ch.className).indexOf('label_')===0)continue;
+      text+=getText(ch)+' ';
+    }
+    var dir=detectDir(text);
+    if(dir==='rtl'){
+      el.style.setProperty('direction','rtl','important');
+      el.style.setProperty('text-align','right','important');
+      flipArrows(el);
+    } else if(dir==='ltr'){
+      el.style.setProperty('direction','ltr','important');
+      el.style.setProperty('text-align','left','important');
+    }
+  }
+
+  /* --- Re-judge everything that governs the block around a text change ------
+     Used for characterData edits AND for text nodes inserted after their
+     element. The element's own insertion was judged while it was still empty
+     (detectDir on '' returns null, so nothing was set), and a text node that
+     lands one tick later is a childList mutation whose added node is the text
+     itself, not an element. That is the sequence the summarized-thinking row
+     produces, and it left the row on the left while every other paragraph
+     went right. */
+  function reapplyAround(parent){
+    if(!parent||parent.nodeType!==1)return;
+    if(!(parent.closest&&parent.closest('pre,code')))stripEscapes(parent);
+    var p=parent.closest(SEL);
+    if(p)setDir(p);
+    var n=parent.closest(NARR_SEL);
+    if(n)setNarrDir(n);
+    var t=parent.closest('table');
+    if(t)setTableDir(t);
+    var ul=parent.closest('ul,ol');
+    if(ul)setListDir(ul);
+  }
+
+  /* --- Safety net: after every burst of mutations, re-judge any prose block
+     that still carries no inline direction. Debounced, and only undecided
+     elements are touched, so the steady-state cost is one cheap query. */
+  var sweepTimer=null;
+  function scheduleSweep(container){
+    if(sweepTimer)return;
+    sweepTimer=setTimeout(function(){
+      sweepTimer=null;
+      var els=container.querySelectorAll(SEL+','+NARR_SEL);
+      for(var i=0;i<els.length;i++){
+        var el=els[i];
+        if(el.style&&el.style.direction)continue;
+        if(el.matches(NARR_SEL))setNarrDir(el);else setDir(el);
+      }
+    },250);
+  }
+
   /* --- List direction: decided by the AGGREGATE text of all items -----------
      A whole ul/ol goes RTL iff the COMBINED text of its bullets leans Hebrew
      (detectDir on the concatenation, same as setTableDir). This replaces the
@@ -462,6 +529,7 @@ CSSPATCH
     if(!container)return;
     stripEscapes(container);
     container.querySelectorAll(SEL).forEach(setDir);
+    container.querySelectorAll(NARR_SEL).forEach(setNarrDir);
     container.querySelectorAll(USER_SEL).forEach(watchUserDir);
     container.querySelectorAll('table').forEach(setTableDir);
     container.querySelectorAll('ul,ol').forEach(setListDir);
@@ -469,38 +537,37 @@ CSSPATCH
       for(var i=0;i<muts.length;i++){
         var m=muts[i];
         if(m.type==='characterData'){
-          var parent=m.target.parentElement;
-          if(parent){
-            if(!(parent.closest&&parent.closest('pre,code')))stripEscapes(parent);
-            var p=parent.closest(SEL);
-            if(p)setDir(p);
-            var t=parent.closest('table');
-            if(t)setTableDir(t);
-            var ul=parent.closest('ul,ol');
-            if(ul)setListDir(ul);
-          }
+          reapplyAround(m.target.parentElement);
           continue;
         }
         for(var j=0;j<m.addedNodes.length;j++){
           var nd=m.addedNodes[j];
+          /* A text node arriving into an existing element: re-judge the
+             blocks around it (see reapplyAround). */
+          if(nd.nodeType===3){reapplyAround(nd.parentElement);continue;}
           if(nd.nodeType!==1)continue;
           if(!(nd.closest&&nd.closest('pre,code')))stripEscapes(nd);
           if(nd.matches&&nd.matches(SEL))setDir(nd);
+          if(nd.matches&&nd.matches(NARR_SEL))setNarrDir(nd);
           if(nd.matches&&nd.matches(USER_SEL))watchUserDir(nd);
           if(nd.tagName==='TABLE')setTableDir(nd);
           if(nd.tagName==='UL'||nd.tagName==='OL')setListDir(nd);
           if(nd.querySelectorAll){
             nd.querySelectorAll(SEL).forEach(setDir);
+            nd.querySelectorAll(NARR_SEL).forEach(setNarrDir);
             nd.querySelectorAll(USER_SEL).forEach(watchUserDir);
             nd.querySelectorAll('table').forEach(setTableDir);
             nd.querySelectorAll('ul,ol').forEach(setListDir);
           }
+          var cn=nd.closest&&nd.closest(NARR_SEL);
+          if(cn)setNarrDir(cn);
           var ct=nd.closest&&nd.closest('table');
           if(ct)setTableDir(ct);
           var cl=nd.closest&&nd.closest('ul,ol');
           if(cl)setListDir(cl);
         }
       }
+      scheduleSweep(container);
     }).observe(container,{childList:true,subtree:true,characterData:true});
   }
   initContainer(document.getElementById('root'));
