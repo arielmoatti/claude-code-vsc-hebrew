@@ -218,8 +218,13 @@ $CSS_PATCH_START
 [class*="questionHeader_"],[class*="questionBlock_"]{
   unicode-bidi:plaintext;text-align:start;
 }
+/* The timeline row is a flex column with align-items:flex-start. A summary
+   block has no width of its own, so it shrink-wraps to its text and sits at
+   the left edge whatever its direction; a line long enough to wrap fills the
+   row and only then aligns. Give it the row's width, like the plain-text
+   block already has. */
 [class*="narrationSummary_"]{
-  unicode-bidi:isolate;text-align:start;
+  width:100%;unicode-bidi:isolate;text-align:start;
 }
 $CSS_PATCH_END
 CSSPATCH
@@ -426,9 +431,9 @@ CSSPATCH
      element. The element's own insertion was judged while it was still empty
      (detectDir on '' returns null, so nothing was set), and a text node that
      lands one tick later is a childList mutation whose added node is the text
-     itself, not an element. That is the sequence the summarized-thinking row
-     produces, and it left the row on the left while every other paragraph
-     went right. */
+     itself, not an element. Reproduced in a harness on the summarized-thinking
+     row and kept as hardening; that row's visible left alignment itself came
+     from its shrink-wrapped width, handled in the CSS block. */
   function reapplyAround(parent){
     if(!parent||parent.nodeType!==1)return;
     if(!(parent.closest&&parent.closest('pre,code')))stripEscapes(parent);
