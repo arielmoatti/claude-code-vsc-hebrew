@@ -16,10 +16,11 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 # Notes are benefit-only and capped at 3 rendered lines - see PROJECTS.md.
-COMPATIBLE_EXT_VERSION="2.1.241"
-CHANGELOG_VERS=(  "1.13.0" "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "1"      "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+COMPATIBLE_EXT_VERSION="2.1.251"
+CHANGELOG_VERS=(  "1.14.0" "1.13.0" "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "1"      "1"      "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "שורה שמתחילה במילה אנגלית בתוך פרומפט עברי כבר לא קופצת שמאלה."
   "שורות הסיכום האפורות של החשיבה (summarized) מתיישרות לימין כמו כל השאר."
   "חבילת העברית מתקינה את עצמה גם ב-Cursor וב-Antigravity, בנוסף לכל טעמי VSCode."
   "שתי החבילות נטענות יחד באמינות, בלי כמה Reload. וקובץ ההגדרות שלכם כבר לא בסכנת דריסה."
@@ -614,7 +615,239 @@ CSSPATCH
     });
   }
   processHistoryList();
-  new MutationObserver(function(){processHistoryList();})
+
+  /* --- Composer: per-line direction by ratio ---------------------------------
+     The prompt box is two stacked layers: a transparent contenteditable that
+     owns the caret, and an absolutely positioned mirror that draws the glyphs.
+     Both sat on CSS unicode-bidi:plaintext, which gives every line the
+     direction of its FIRST STRONG character - so a single Latin letter at the
+     head of an otherwise Hebrew line threw that whole line to the left.
+
+     detectDir (the 30% ratio) is the rule we want, but it cannot be expressed
+     in CSS, and a line is not an element: contenteditable plaintext-only keeps
+     the text in flat nodes separated by real newlines. Wrapping lines in <div>s
+     would give us elements, but the app reads the box with textContent, and
+     textContent DROPS the newlines between block children - that would strip
+     every line break out of the message actually sent.
+
+     So a line becomes an inline <span> forced to display:block (its own block
+     box, therefore its own direction and text-align), and each separating
+     newline stays a real character inside a display:none span: invisible to
+     layout, untouched in textContent. Caret and glyphs then live in the same
+     block, so the caret cannot drift away from the text.
+
+     The mirror is React-owned and must never have its children replaced (that
+     is the crash class this pack learned the hard way), so it is dimmed and a
+     clone of it - carrying the mention chips and the argument hint with their
+     classes - is restructured the same way and laid over it. */
+  var INPUT_SEL='[class*="messageInput_"]';   /* trailing _ : never the Container */
+  var MIRROR_SEL='[class*="mentionMirror_"]';
+  var LINE_ATTR='data-rtl-line';
+  var NL_ATTR='data-rtl-nl';
+  var SHADOW_ATTR='data-rtl-shadow';
+  var LINE_CSS='display:block;unicode-bidi:isolate;text-align:start;';
+  var rebuilding=false, composing=false;
+
+  /* Distribute a flat node list into one block span per line, keeping every
+     newline as a real character inside a hidden span. */
+  function buildLines(dst,nodes){
+    var line=null,lineText='';
+    function openLine(){
+      line=document.createElement('span');
+      line.setAttribute(LINE_ATTR,'1');
+      line.style.cssText=LINE_CSS;
+      lineText='';
+      dst.appendChild(line);
+    }
+    function closeLine(last){
+      var d=detectDir(lineText);
+      if(d)line.style.direction=d;
+      /* an empty line still needs a line box, exactly like the newline it replaces */
+      if(!line.firstChild)line.appendChild(document.createElement('br'));
+      if(last)return;
+      var nl=document.createElement('span');
+      nl.setAttribute(NL_ATTR,'1');
+      nl.style.display='none';
+      nl.appendChild(document.createTextNode('\n'));
+      dst.appendChild(nl);
+    }
+    openLine();
+    for(var i=0;i<nodes.length;i++){
+      var n=nodes[i];
+      if(n.nodeType===3){
+        var parts=n.data.split('\n');
+        for(var k=0;k<parts.length;k++){
+          if(k){closeLine(false);openLine();}
+          if(parts[k]){line.appendChild(document.createTextNode(parts[k]));lineText+=parts[k];}
+        }
+      } else {
+        line.appendChild(n);
+        lineText+=n.textContent;
+      }
+    }
+    closeLine(true);
+  }
+
+  /* Strict alternation line,nl,line,nl,...,line matching exactly these lines. */
+  function structureMatches(el,lines){
+    var kids=el.childNodes;
+    if(kids.length!==lines.length*2-1)return false;
+    for(var i=0;i<kids.length;i++){
+      var k=kids[i];
+      if(k.nodeType!==1)return false;
+      if(i%2===0){
+        if(!k.hasAttribute(LINE_ATTR)||k.textContent!==lines[i/2])return false;
+        /* A line must be exactly its text, or exactly the <br> that stands in
+           for an empty one. Anything else - typically the <br> left behind
+           when the user starts typing on a line that was empty - paints a
+           phantom blank row, and textContent alone would not reveal it. */
+        var kids2=k.childNodes;
+        if(lines[i/2]===''){
+          if(kids2.length!==1||kids2[0].nodeName!=='BR')return false;
+        } else {
+          for(var q=0;q<kids2.length;q++)if(kids2[q].nodeType!==3)return false;
+        }
+      } else if(!k.hasAttribute(NL_ATTR)||k.textContent!=='\n')return false;
+    }
+    return true;
+  }
+
+  /* Direction is re-judged on every keystroke (a line can cross the 30% bar
+     mid-word); this touches style only, never the DOM shape or the caret. */
+  function refreshLineDirs(el){
+    var ls=el.querySelectorAll('['+LINE_ATTR+']');
+    for(var i=0;i<ls.length;i++){
+      var d=detectDir(ls[i].textContent)||'';
+      if(ls[i].style.direction!==d)ls[i].style.direction=d;
+    }
+  }
+
+  /* Selection as character offsets into textContent. Range.toString() walks the
+     DOM, not the layout, so the hidden newline spans are counted exactly like
+     the newlines they hold. */
+  function selOffsets(el){
+    var s=window.getSelection();
+    if(!s||!s.rangeCount)return null;
+    var r=s.getRangeAt(0);
+    if(!el.contains(r.startContainer)||!el.contains(r.endContainer))return null;
+    var a=document.createRange(),b=document.createRange();
+    a.selectNodeContents(el);b.selectNodeContents(el);
+    try{
+      a.setEnd(r.startContainer,r.startOffset);
+      b.setEnd(r.endContainer,r.endOffset);
+    }catch(e){return null;}
+    return {start:a.toString().length,end:b.toString().length};
+  }
+
+  /* Absolute offset -> (line, column) is unambiguous, unlike walking text
+     nodes: an offset right after a newline belongs to the START of the next
+     line, not to the end of the previous one. */
+  function placeCaret(el,text,off){
+    if(off==null)return;
+    var before=text.slice(0,off);
+    var li=(before.match(/\n/g)||[]).length;
+    var col=off-(before.lastIndexOf('\n')+1);
+    var span=el.querySelectorAll('['+LINE_ATTR+']')[li];
+    if(!span)return;
+    var r=document.createRange(),placed=false;
+    var w=document.createTreeWalker(span,NodeFilter.SHOW_TEXT),n,seen=0;
+    while((n=w.nextNode())){
+      if(col<=seen+n.data.length){r.setStart(n,col-seen);placed=true;break;}
+      seen+=n.data.length;
+    }
+    if(!placed)r.setStart(span,0);
+    r.collapse(true);
+    try{var s=window.getSelection();s.removeAllRanges();s.addRange(r);}catch(e){}
+  }
+
+  function structureInput(el){
+    if(rebuilding||composing)return;
+    var text=el.textContent;
+    /* An empty box must stay literally empty - the placeholder is a
+       :empty:before rule, and any child of ours would silence it. */
+    if(text===''){
+      if(el.firstChild){rebuilding=true;el.textContent='';rebuilding=false;}
+      return;
+    }
+    var lines=text.split('\n');
+    if(structureMatches(el,lines)){refreshLineDirs(el);return;}
+    var so=selOffsets(el);
+    rewrite(el,text);
+    placeCaret(el,text,so?so.start:null);
+  }
+
+  function rewrite(el,text){
+    rebuilding=true;
+    el.textContent='';
+    var frag=document.createDocumentFragment();
+    buildLines(frag,[document.createTextNode(text)]);
+    el.appendChild(frag);
+    rebuilding=false;
+  }
+
+  function syncShadow(mirror){
+    var host=mirror.parentElement;
+    if(!host)return;
+    var shadow=host.querySelector('['+SHADOW_ATTR+']');
+    if(!shadow){
+      shadow=document.createElement('div');
+      shadow.setAttribute(SHADOW_ATTR,'1');
+      shadow.setAttribute('aria-hidden','true');
+      shadow.className=mirror.className;      /* same geometry, padding, chips */
+      host.appendChild(shadow);
+    }
+    /* Never replace React's children - only dim them, on a property React
+       does not manage for this element. */
+    if(mirror.style.color!=='transparent')mirror.style.color='transparent';
+    var clone=mirror.cloneNode(true),nodes=[];
+    while(clone.firstChild){nodes.push(clone.firstChild);clone.removeChild(clone.firstChild);}
+    shadow.textContent='';
+    if(nodes.length)buildLines(shadow,nodes);
+  }
+
+  function initComposer(){
+    var inp=document.querySelector(INPUT_SEL);
+    if(inp&&!inp.__ccRtlComposer){
+      inp.__ccRtlComposer=true;
+      inp.addEventListener('compositionstart',function(){composing=true;});
+      inp.addEventListener('compositionend',function(){composing=false;structureInput(inp);});
+      /* Plain Enter is the app's own (it sends, or inserts the newline itself),
+         but Shift+Enter falls through to the browser, which answers it by
+         SPLITTING the block at the caret - and that clones the hidden newline
+         span, so the text gains a line break the user never typed. Insert the
+         newline as a plain character instead: no block split, a real input
+         event for React, and native handling of a replaced selection. */
+      inp.addEventListener('beforeinput',function(ev){
+        if(ev.inputType!=='insertParagraph'&&ev.inputType!=='insertLineBreak')return;
+        var so=selOffsets(inp);
+        if(!so)return;                      /* no usable selection: leave it alone */
+        ev.preventDefault();
+        var text=inp.textContent;
+        var next=text.slice(0,so.start)+'\n'+text.slice(so.end);
+        rewrite(inp,next);
+        placeCaret(inp,next,so.start+1);
+        /* React reads the box on input; it never sees our DOM work otherwise */
+        inp.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertLineBreak'}));
+      });
+      inp.addEventListener('input',function(){structureInput(inp);});
+      /* Programmatic textContent writes (mention accept, slash command, clear
+         on send) fire no input event - the observer is what catches those. */
+      new MutationObserver(function(){structureInput(inp);})
+        .observe(inp,{childList:true,characterData:true,subtree:true});
+      structureInput(inp);
+    }
+    var mir=document.querySelector(MIRROR_SEL+':not(['+SHADOW_ATTR+'])');
+    if(mir&&!mir.__ccRtlComposer){
+      mir.__ccRtlComposer=true;
+      /* the shadow is a SIBLING, so our writes never re-enter this observer */
+      new MutationObserver(function(){syncShadow(mir);})
+        .observe(mir,{childList:true,characterData:true,subtree:true});
+      syncShadow(mir);
+    }
+  }
+  initComposer();
+
+  new MutationObserver(function(){processHistoryList();initComposer();})
     .observe(document.body,{childList:true,subtree:true});
 })();
 
