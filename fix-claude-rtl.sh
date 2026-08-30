@@ -17,9 +17,10 @@ export PATH
 # the JS strings.
 # Notes are benefit-only and capped at 3 rendered lines - see PROJECTS.md.
 COMPATIBLE_EXT_VERSION="2.1.251"
-CHANGELOG_VERS=(  "1.14.0" "1.13.0" "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "1"      "1"      "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+CHANGELOG_VERS=(  "1.14.1" "1.14.0" "1.13.0" "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "0"      "1"      "1"      "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "גלילה ומיקום הסמן בחלונית הפרומפט תקינים גם בפרומפט ארוך."
   "שורה שמתחילה במילה אנגלית בתוך פרומפט עברי כבר לא קופצת שמאלה."
   "שורות הסיכום האפורות של החשיבה (summarized) מתיישרות לימין כמו כל השאר."
   "חבילת העברית מתקינה את עצמה גם ב-Cursor וב-Antigravity, בנוסף לכל טעמי VSCode."
@@ -774,15 +775,63 @@ CSSPATCH
     var so=selOffsets(el);
     rewrite(el,text);
     placeCaret(el,text,so?so.start:null);
+    /* Restoring the old scrollTop can leave the caret off-screen (a backspace
+       that merged two lines, say). Only while the box is actually focused. */
+    if(document.activeElement===el)revealCaret(el);
+    followScroll(el);
   }
 
   function rewrite(el,text){
+    /* Replacing the children resets scrollTop to 0. In a box tall enough to
+       overflow that threw the view back to the first line on every structural
+       change - and the caret with it. */
+    var st=el.scrollTop,sl=el.scrollLeft;
     rebuilding=true;
     el.textContent='';
     var frag=document.createDocumentFragment();
     buildLines(frag,[document.createTextNode(text)]);
     el.appendChild(frag);
     rebuilding=false;
+    el.scrollTop=st;el.scrollLeft=sl;
+  }
+
+  /* The app keeps the mirror in step with the editable on its scroll event
+     (t1.scrollTop=M1.scrollTop). Our layer is a third element nobody syncs,
+     and it is rebuilt from scratch on every keystroke, so it has to be put
+     back in step both on scroll and after each rebuild. */
+  function shadowOf(el){
+    var h=el.parentElement;
+    return h?h.querySelector('['+SHADOW_ATTR+']'):null;
+  }
+  function followScroll(el){
+    var sh=shadowOf(el);
+    if(!sh)return;
+    if(sh.scrollTop!==el.scrollTop)sh.scrollTop=el.scrollTop;
+    if(sh.scrollLeft!==el.scrollLeft)sh.scrollLeft=el.scrollLeft;
+  }
+
+  /* We preventDefault the browser's own newline insertion, so its "keep the
+     caret on screen" behaviour does not run either. */
+  function revealCaret(el){
+    var s=window.getSelection();
+    if(!s||!s.rangeCount)return;
+    var rg=s.getRangeAt(0);
+    if(!el.contains(rg.startContainer))return;
+    var r=rg.getBoundingClientRect();
+    if(!r||(!r.top&&!r.bottom&&!r.height)){
+      /* A collapsed range on a line that holds only a <br> - the line you land
+         on right after Enter - reports an empty rect. Fall back to the line
+         box itself, or the caret never gets scrolled into view. */
+      var n=rg.startContainer,e=n.nodeType===1?n:n.parentElement;
+      var lineEl=e&&e.closest?e.closest('['+LINE_ATTR+']'):null;
+      if(!lineEl)return;
+      r=lineEl.getBoundingClientRect();
+    }
+    var b=el.getBoundingClientRect(),cs=getComputedStyle(el);
+    var top=b.top+(parseFloat(cs.paddingTop)||0);
+    var bot=b.bottom-(parseFloat(cs.paddingBottom)||0);
+    if(r.top<top)el.scrollTop-=(top-r.top);
+    else if(r.bottom>bot)el.scrollTop+=(r.bottom-bot);
   }
 
   function syncShadow(mirror){
@@ -803,6 +852,8 @@ CSSPATCH
     while(clone.firstChild){nodes.push(clone.firstChild);clone.removeChild(clone.firstChild);}
     shadow.textContent='';
     if(nodes.length)buildLines(shadow,nodes);
+    var inp=host.querySelector(INPUT_SEL);
+    if(inp)followScroll(inp);
   }
 
   function initComposer(){
@@ -826,10 +877,13 @@ CSSPATCH
         var next=text.slice(0,so.start)+'\n'+text.slice(so.end);
         rewrite(inp,next);
         placeCaret(inp,next,so.start+1);
+        revealCaret(inp);
+        followScroll(inp);
         /* React reads the box on input; it never sees our DOM work otherwise */
         inp.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertLineBreak'}));
       });
-      inp.addEventListener('input',function(){structureInput(inp);});
+      inp.addEventListener('input',function(){structureInput(inp);followScroll(inp);});
+      inp.addEventListener('scroll',function(){followScroll(inp);});
       /* Programmatic textContent writes (mention accept, slash command, clear
          on send) fire no input event - the observer is what catches those. */
       new MutationObserver(function(){structureInput(inp);})
