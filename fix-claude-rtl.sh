@@ -16,10 +16,11 @@ export PATH
 # " \ | &  - ASCII apostrophes are auto-swapped to U+2019 so they can't break
 # the JS strings.
 # Notes are benefit-only and capped at 3 rendered lines - see PROJECTS.md.
-COMPATIBLE_EXT_VERSION="2.1.251"
-CHANGELOG_VERS=(  "1.14.1" "1.14.0" "1.13.0" "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
-CHANGELOG_MAJOR=( "0"      "1"      "1"      "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
+COMPATIBLE_EXT_VERSION="2.1.252"
+CHANGELOG_VERS=(  "1.15.0" "1.14.1" "1.14.0" "1.13.0" "1.12.0" "1.11.0" "1.10.0" "1.9.0" "1.8.0" "1.7.0" "1.6.0" "1.5.2" "1.5.1" "1.5.0" "1.4.0" "1.3.0" "1.2.0" "1.1.0" )
+CHANGELOG_MAJOR=( "1"      "0"      "1"      "1"      "0"      "1"      "0"      "1"     "0"     "0"     "0"     "0"     "0"     "1"     "1"     "1"     "1"     "1"     )
 CHANGELOG_NOTES=(
+  "מספר שבא אחרי מילה בעיצוב קוד כבר לא קופץ למקום אחר בשורה."
   "גלילה ומיקום הסמן בחלונית הפרומפט תקינים גם בפרומפט ארוך."
   "שורה שמתחילה במילה אנגלית בתוך פרומפט עברי כבר לא קופצת שמאלה."
   "שורות הסיכום האפורות של החשיבה (summarized) מתיישרות לימין כמו כל השאר."
@@ -197,8 +198,17 @@ $CSS_PATCH_START
 #content li,#content blockquote,#content td,#content th,#content dd,#content dt{
   unicode-bidi:isolate;text-align:start;
 }
+/* isolate, NOT embed. An embedding does not close its bidi run, so the text
+   AFTER an inline code span starts a level run whose sos is L. The first
+   number that follows then resolves LTR (W7) and jumps to the wrong side,
+   dragging the period/comma/colon between them with it:
+   a code-span word, then a period, then 47, came out as: word, 47, period.
+   (No backticks in this comment on purpose: the CSSPATCH heredoc is unquoted,
+   so a backtick here would run as a command substitution.)
+   isolate makes the span one neutral object, so the digits keep the
+   paragraph's RTL context. Harness: 9/15 with embed, 15/15 with isolate. */
 #root pre,#root code,#content pre,#content code{
-  direction:ltr;text-align:left;unicode-bidi:embed;
+  direction:ltr;text-align:left;unicode-bidi:isolate;
 }
 #root li[style*="direction: rtl"],#content li[style*="direction: rtl"]{
   list-style-position:inside;
